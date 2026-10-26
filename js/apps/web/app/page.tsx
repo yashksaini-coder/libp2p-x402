@@ -6,7 +6,7 @@ import { HeroMockup } from '@/components/landing/HeroMockup'
 import { Bento } from '@/components/landing/Bento'
 import { Tagline } from '@/components/landing/Tagline'
 import { COMPARE, FAQ, STEPS } from '@/components/landing/content'
-import { Accordion } from '@/components/landing/Accordion'
+import { FaqSection } from '@/components/landing/FaqSection'
 import { REPO_URL, SPEC_URL } from '@/lib/config'
 
 const PROOF = 'Settled on Solana devnet · open spec for x402 v2'
@@ -171,7 +171,7 @@ export default function Home() {
             <Eyebrow>FAQ</Eyebrow>
             <h2 id="faq-title" className="text-4xl font-semibold tracking-tight">Questions from the room</h2>
           </div>
-          <Accordion items={FAQ} />
+          <FaqSection items={FAQ} />
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd).replace(/</g, '\\u003c') }} />
         </section>
 

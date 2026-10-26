@@ -10,13 +10,17 @@ import { cx } from '@/components/ui'
 
 export type QA = readonly [question: string, answer: string]
 
-export function Accordion({ items, className }: { items: readonly QA[], className?: string }) {
+export function Accordion({ items, className, onToggle }: { items: readonly QA[], className?: string, onToggle?: (index: number, open: boolean) => void }) {
   const [open, setOpen] = useState<Set<number>>(() => new Set())
-  const toggle = (i: number) => setOpen((current) => {
-    const next = new Set(current)
-    if (!next.delete(i)) next.add(i)
-    return next
-  })
+  const toggle = (i: number) => {
+    const opening = !open.has(i)
+    setOpen((current) => {
+      const next = new Set(current)
+      if (!next.delete(i)) next.add(i)
+      return next
+    })
+    onToggle?.(i, opening)
+  }
   const headers = useRef<(HTMLButtonElement | null)[]>([])
   const baseId = useId()
   const focusHeader = (i: number) => headers.current[(i + items.length) % items.length]?.focus()
@@ -45,7 +49,10 @@ export function Accordion({ items, className }: { items: readonly QA[], classNam
                 }}
                 className="group flex w-full items-center justify-between gap-6 rounded-md py-6 text-left text-lg font-semibold text-balance text-white outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
               >
-                {question}
+                <span className="flex items-baseline gap-4">
+                  <span aria-hidden className={cx('font-mono text-sm tabular-nums transition-colors duration-250', isOpen ? 'text-white' : 'text-muted')}>{String(i + 1).padStart(2, '0')}</span>
+                  <span>{question}</span>
+                </span>
                 <CaretDown
                   size={20}
                   aria-hidden
@@ -77,7 +84,7 @@ export function Accordion({ items, className }: { items: readonly QA[], classNam
                       : '[transform:perspective(640px)_rotateX(-72deg)] opacity-0 duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]'
                   )}
                 >
-                  <p className="max-w-[680px] pr-10 pb-6 text-base text-pretty text-muted">{answer}</p>
+                  <p className="max-w-[680px] pr-10 pb-6 pl-10 text-base text-pretty text-muted">{answer}</p>
                   {/* The crease: text near the hinge stays veiled in the page colour until the flap lies flat. */}
                   <span
                     aria-hidden
