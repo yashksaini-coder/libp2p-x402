@@ -1,11 +1,12 @@
 import Link from 'next/link'
-import { ArrowRight, ArrowUpRight, Plus } from '@phosphor-icons/react/ssr'
+import { ArrowRight, ArrowUpRight } from '@phosphor-icons/react/ssr'
 import { Button, Eyebrow } from '@/components/ui'
 import { Reveal } from '@/components/landing/Reveal'
 import { HeroMockup } from '@/components/landing/HeroMockup'
 import { Bento } from '@/components/landing/Bento'
 import { Tagline } from '@/components/landing/Tagline'
 import { COMPARE, FAQ, STEPS } from '@/components/landing/content'
+import { Accordion } from '@/components/landing/Accordion'
 import { REPO_URL, SPEC_URL } from '@/lib/config'
 
 const PROOF = 'Settled on Solana devnet · open spec for x402 v2'
@@ -170,17 +171,7 @@ export default function Home() {
             <Eyebrow>FAQ</Eyebrow>
             <h2 id="faq-title" className="text-4xl font-semibold tracking-tight">Questions from the room</h2>
           </div>
-          <div className="flex flex-col divide-y divide-white/10 rounded-2xl border border-line bg-panel">
-            {FAQ.map(([q, a]) => (
-              <details key={q} className="group">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-6 rounded-2xl p-6 text-lg font-semibold transition-colors duration-300 ease-out hover:bg-raised [&::-webkit-details-marker]:hidden">
-                  {q}
-                  <Plus size={20} className="shrink-0 text-muted transition-transform duration-300 ease-out group-open:rotate-45" aria-hidden />
-                </summary>
-                <p className="max-w-[680px] px-6 pb-6 text-base text-muted">{a}</p>
-              </details>
-            ))}
-          </div>
+          <Accordion items={FAQ} />
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd).replace(/</g, '\\u003c') }} />
         </section>
 
