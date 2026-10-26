@@ -81,9 +81,12 @@ export function pinHandler (helia: Helia, server: x402ResourceServer, pricing: P
       return await ctx.fail(err.code, err.message)
     }
 
-    // Store and pin *before* settling: storage can be undone, a payment cannot. One pin
-    // per root at a time, so a rollback can never remove a pin another payer just made.
-    const settlement = await locks.run(root.toString(), async () => {
+    // Store and pin *before* settling: storage can be undone, a payment cannot. Rollback deletes
+    // blocks this upload added, and different DAGs can share blocks, so the whole
+    // store -> pin -> settle -> rollback sequence runs one upload at a time per provider.
+    // ponytail: provider-wide lock serialises settlements (~1 s each on devnet); per-block
+    // reference counts of in-flight uploads would allow concurrency if throughput matters.
+    const settlement = await locks.run('store', async () => {
       const added: CID[] = []
       for (const b of checked.blocks) {
         if (!(await helia.blockstore.has(b.cid))) added.push(b.cid)
