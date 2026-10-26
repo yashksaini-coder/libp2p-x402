@@ -161,3 +161,15 @@ test('manual settle: handler settles then replies', async () => {
     assert.equal(settles(), 1)
   } finally { await close() }
 })
+
+test('garbage first frame resets the stream instead of leaving it open', async () => {
+  const { provider, agent, close } = await setup()
+  try {
+    const stream = await agent.dialProtocol(provider.getMultiaddrs()[0], PROTOCOL)
+    const { lpStream } = await import('@libp2p/utils')
+    const lp = lpStream(stream)
+    await lp.read() // rate card
+    await lp.write(new TextEncoder().encode('not json'))
+    await assert.rejects(lp.read({ signal: AbortSignal.timeout(5000) }), (e: Error) => e.name !== 'TimeoutError' && e.name !== 'AbortError')
+  } finally { await close() }
+})

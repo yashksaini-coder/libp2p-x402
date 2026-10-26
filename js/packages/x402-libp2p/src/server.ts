@@ -47,7 +47,9 @@ export function paid (server: x402ResourceServer, opts: PaidOptions, handler: (c
 
   return async (stream, connection) => {
     const lp = lpStream(stream, { maxDataLength: MAX_FRAME_BYTES })
+    let reported = false
     const fail = async (code: string, message?: string, paymentRequired?: PaymentRequired): Promise<void> => {
+      reported = true
       await writeFrame(lp, { type: 'x402/error', code, message, paymentRequired })
       await stream.close() // close, not abort: a reset could drop the error frame in flight
     }
@@ -100,8 +102,8 @@ export function paid (server: x402ResourceServer, opts: PaidOptions, handler: (c
       if ((opts.settle ?? 'before') === 'before') await settle()
       await handler({ lp, stream, connection, payment, requirements, request, settle, fail: async (code, message) => { await fail(code, message) } })
     } catch (err) {
-      if (err instanceof X402Error) return // already reported to the peer
-      stream.abort(err as Error)
+      if (reported) return // the peer already has an x402/error frame and the stream is closed
+      stream.abort(err as Error) // garbage frame, timeout, handler bug: reset, never leave it open
     }
   }
 }
