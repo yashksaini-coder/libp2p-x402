@@ -24,8 +24,8 @@ export class X402Error extends Error {
   }
 }
 
-export async function writeFrame (lp: LengthPrefixedStream, frame: Frame): Promise<void> {
-  await lp.write(new TextEncoder().encode(JSON.stringify(frame)))
+export async function writeFrame (lp: LengthPrefixedStream, frame: Frame, signal?: AbortSignal): Promise<void> {
+  await lp.write(new TextEncoder().encode(JSON.stringify(frame)), { signal })
 }
 
 export async function readFrame (lp: LengthPrefixedStream, signal?: AbortSignal): Promise<Frame> {

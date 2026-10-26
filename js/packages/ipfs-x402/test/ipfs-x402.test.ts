@@ -164,3 +164,23 @@ test('declined settlement leaves no pin and no new blocks behind', async () => {
     assert.equal(await provider.blockstore.has(root), false, 'unpaid blocks must not stay in the store')
   } finally { await Promise.all([provider.stop(), agent.stop()]) }
 })
+
+test('a peer that pays and then goes silent cannot hold the provider lock', async () => {
+  const [provider, agent] = await Promise.all([heliaNode(), heliaNode()])
+  try {
+    const mock = await mockServer({ settleOk: false })
+    await provider.libp2p.handle(PIN_PROTOCOL, pinHandler(provider, mock.server, pricingFor(provider), { maxBytes: 1_000_000, durationDays: 30 }))
+    const addr = provider.libp2p.getMultiaddrs()[0]
+    const { root } = await addFile(agent)
+    const car = await carOf(agent, root)
+    // Silent peer: pays, sends the whole CAR, then never reads and never closes.
+    const { payAndOpen } = await import('x402-libp2p')
+    const { sendCar } = await import('../src/index.ts')
+    const silent = await payAndOpen(agent.libp2p, addr, PIN_PROTOCOL, mockClient(), { request: { root: root.toString(), bytes: car.byteLength }, settle: 'manual' })
+    await sendCar(silent.lp, car)
+    // An honest upload right after must still get its answer promptly.
+    const started = Date.now()
+    await assert.rejects(pinPaid(agent.libp2p, addr, car, root, mockClient()), (e: X402Error) => e.code === 'insufficient_funds')
+    assert.ok(Date.now() - started < 15_000, `second upload waited ${Date.now() - started} ms behind a silent peer`)
+  } finally { await Promise.all([provider.stop(), agent.stop()]) }
+})

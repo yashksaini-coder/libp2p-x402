@@ -21,6 +21,8 @@ export interface PaidOptions {
   invoice?: (request: Record<string, unknown>, peer: PeerId) => Promise<PaymentRequirements[]>
   /** How long to wait for each client control frame. Default 30s. */
   paymentTimeoutMs?: number
+  /** Bound on each gate write/close toward the peer, so a peer that stops reading cannot stall the server. Default 10s. */
+  ioTimeoutMs?: number
 }
 
 export interface PaidContext {
@@ -44,13 +46,14 @@ export interface PaidContext {
  */
 export function paid (server: x402ResourceServer, opts: PaidOptions, handler: (ctx: PaidContext) => Promise<void>): StreamHandler {
   const timeout = (): AbortSignal => AbortSignal.timeout(opts.paymentTimeoutMs ?? 30_000)
+  const io = (): AbortSignal => AbortSignal.timeout(opts.ioTimeoutMs ?? 10_000)
 
   return async (stream, connection) => {
     const lp = lpStream(stream, { maxDataLength: MAX_FRAME_BYTES })
     let reported = false
     const fail = async (code: string, message?: string, paymentRequired?: PaymentRequired): Promise<void> => {
-      await writeFrame(lp, { type: 'x402/error', code, message, paymentRequired })
-      await stream.close() // close, not abort: a reset could drop the error frame in flight
+      await writeFrame(lp, { type: 'x402/error', code, message, paymentRequired }, io())
+      await stream.close({ signal: io() }) // close, not abort: a reset could drop the error frame in flight
       reported = true // only once the peer has it; if either step threw, the catch resets the stream
     }
 
@@ -89,10 +92,13 @@ export function paid (server: x402ResourceServer, opts: PaidOptions, handler: (c
         settled ??= (async () => {
           const settlement = await server.settlePayment(payment, requirements)
           if (!settlement.success) {
-            await fail(settlement.errorReason ?? 'settlement_failed', settlement.errorMessage, paymentRequired)
-            throw new X402Error(settlement.errorReason ?? 'settlement_failed', settlement.errorMessage)
+            const declined = new X402Error(settlement.errorReason ?? 'settlement_failed', settlement.errorMessage)
+            // A decline is always reported to the caller as X402Error (callers roll back on it),
+            // even if telling the peer fails; the stream is then reset by the outer catch.
+            await fail(declined.code, declined.message, paymentRequired).catch(() => { stream.abort(new Error('could not deliver x402/error')) })
+            throw declined
           }
-          await writeFrame(lp, { type: 'x402/settlement', settlementResponse: settlement })
+          await writeFrame(lp, { type: 'x402/settlement', settlementResponse: settlement }, io())
           return settlement
         })()
         return await settled
