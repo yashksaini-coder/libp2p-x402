@@ -2,15 +2,15 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createLibp2p, type Libp2p } from 'libp2p'
 import { tcp } from '@libp2p/tcp'
-import { noise } from '@chainsafe/libp2p-noise'
-import { yamux } from '@chainsafe/libp2p-yamux'
+import { noise } from '@libp2p/noise'
+import { yamux } from '@libp2p/yamux'
 import { generateKeyPair, privateKeyFromRaw } from '@libp2p/crypto/keys'
 import { peerIdFromPrivateKey } from '@libp2p/peer-id'
 import { x402Client } from '@x402/core/client'
 import { x402ResourceServer } from '@x402/core/server'
 import type { FacilitatorClient } from '@x402/core/server'
 import type { PaymentRequirements, SchemeNetworkClient, SchemeNetworkServer } from '@x402/core/types'
-import { paid, payAndOpen, payeeFromPeerId, X402Error } from '../src/index.ts'
+import { awaitSettlement, paid, payAndOpen, payeeFromPeerId, X402Error, type PaidContext, type PaidOptions } from '../src/index.ts'
 
 const DEVNET = 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1' as const
 const PROTOCOL = '/x402-test/echo/1.0.0'
@@ -23,10 +23,14 @@ const mockSchemeServer: SchemeNetworkServer = {
   parsePrice: async () => ({ amount: '1000', asset: 'USDC' }),
   enhancePaymentRequirements: async (r: PaymentRequirements) => r
 }
-const mockFacilitator: FacilitatorClient = {
-  verify: async (p) => p.payload.sig === 'ok' ? { isValid: true, payer: 'agent' } : { isValid: false, invalidReason: 'invalid_signature' },
-  settle: async (_p, r) => ({ success: true, transaction: 'mocktx', network: r.network, payer: 'agent' }),
-  getSupported: async () => ({ kinds: [{ x402Version: 2, scheme: 'mock', network: DEVNET }], extensions: [], signers: {} })
+function mockFacilitator (): FacilitatorClient & { settles: () => number } {
+  let n = 0
+  return {
+    verify: async (p) => p.payload.sig === 'ok' ? { isValid: true, payer: 'agent' } : { isValid: false, invalidReason: 'invalid_signature' },
+    settle: async (_p, r) => { n++; return { success: true, transaction: 'mocktx', network: r.network, payer: 'agent' } },
+    getSupported: async () => ({ kinds: [{ x402Version: 2, scheme: 'mock', network: DEVNET }], extensions: [], signers: {} }),
+    settles: () => n
+  }
 }
 function payer (sig: string): { client: x402Client, calls: () => number } {
   let n = 0
@@ -44,15 +48,30 @@ const node = async (): Promise<Libp2p> => createLibp2p({
   streamMuxers: [yamux()]
 })
 
-async function setup (payTo?: string): Promise<{ provider: Libp2p, agent: Libp2p, close: () => Promise<void> }> {
+const req = (payTo: string, amount = '1000'): PaymentRequirements =>
+  ({ scheme: 'mock', network: DEVNET, amount, asset: 'USDC', payTo, maxTimeoutSeconds: 60, extra: {} })
+const echo = async ({ lp }: PaidContext): Promise<void> => { await lp.write(await lp.read()) }
+
+interface SetupOpts {
+  payTo?: string
+  settle?: PaidOptions['settle']
+  invoice?: (payee: string) => PaidOptions['invoice']
+  handler?: (ctx: PaidContext) => Promise<void>
+}
+
+async function setup (opts: SetupOpts = {}): Promise<{ provider: Libp2p, agent: Libp2p, settles: () => number, close: () => Promise<void> }> {
   const [provider, agent] = await Promise.all([node(), node()])
-  const server = new x402ResourceServer(mockFacilitator).register(DEVNET, mockSchemeServer)
+  const facilitator = mockFacilitator()
+  const server = new x402ResourceServer(facilitator).register(DEVNET, mockSchemeServer)
   await server.initialize()
-  const accepts = [{ scheme: 'mock', network: DEVNET, amount: '1000', asset: 'USDC', payTo: payTo ?? payeeFromPeerId(provider.peerId)!, maxTimeoutSeconds: 60, extra: {} }]
-  await provider.handle(PROTOCOL, paid(server, { accepts, resource: { url: `libp2p://${provider.peerId}${PROTOCOL}` } }, async ({ lp }) => {
-    await lp.write(await lp.read()) // echo one frame
-  }))
-  return { provider, agent, close: async () => { await Promise.all([provider.stop(), agent.stop()]) } }
+  const payee = payeeFromPeerId(provider.peerId)!
+  await provider.handle(PROTOCOL, paid(server, {
+    accepts: [req(opts.payTo ?? payee)],
+    resource: { url: `libp2p://${provider.peerId}${PROTOCOL}` },
+    settle: opts.settle,
+    invoice: opts.invoice?.(payee)
+  }, opts.handler ?? echo))
+  return { provider, agent, settles: facilitator.settles, close: async () => { await Promise.all([provider.stop(), agent.stop()]) } }
 }
 
 test('payeeFromPeerId gives the Solana address of the Ed25519 key', async () => {
@@ -67,7 +86,7 @@ test('agent pays provider, gets settlement, then the gated protocol runs', async
   try {
     const { client } = payer('ok')
     const { lp, settlement } = await payAndOpen(agent, provider.getMultiaddrs()[0], PROTOCOL, client)
-    assert.equal(settlement.transaction, 'mocktx')
+    assert.equal(settlement?.transaction, 'mocktx')
     await lp.write(new TextEncoder().encode('hello'))
     assert.equal(new TextDecoder().decode((await lp.read()).subarray()), 'hello')
   } finally { await close() }
@@ -75,7 +94,7 @@ test('agent pays provider, gets settlement, then the gated protocol runs', async
 
 test('agent refuses to sign when payTo is not the remote peer key', async () => {
   const other = payeeFromPeerId(peerIdFromPrivateKey(await generateKeyPair('Ed25519')))
-  const { provider, agent, close } = await setup(other)
+  const { provider, agent, close } = await setup({ payTo: other })
   try {
     const { client, calls } = payer('ok')
     await assert.rejects(payAndOpen(agent, provider.getMultiaddrs()[0], PROTOCOL, client),
@@ -89,5 +108,56 @@ test('invalid payment gets an x402/error frame carrying a fresh PaymentRequired'
   try {
     await assert.rejects(payAndOpen(agent, provider.getMultiaddrs()[0], PROTOCOL, payer('bad').client),
       (e: X402Error) => e.code === 'invalid_signature' && e.paymentRequired?.accepts.length === 1)
+  } finally { await close() }
+})
+
+test('request frame yields an invoice that is paid instead of the rate card', async () => {
+  let seen: unknown
+  const { provider, agent, close } = await setup({
+    invoice: (payee) => async (request) => { seen = request.root; return [req(payee, '2500')] }
+  })
+  try {
+    const { settlement, paymentRequired } = await payAndOpen(agent, provider.getMultiaddrs()[0], PROTOCOL, payer('ok').client, { request: { root: 'bafyroot' } })
+    assert.equal(settlement?.transaction, 'mocktx')
+    assert.equal(paymentRequired.accepts[0].amount, '2500')
+    assert.equal(seen, 'bafyroot')
+  } finally { await close() }
+})
+
+test('invoice with foreign payTo is refused', async () => {
+  const other = payeeFromPeerId(peerIdFromPrivateKey(await generateKeyPair('Ed25519')))!
+  const { provider, agent, close } = await setup({ invoice: () => async () => [req(other, '2500')] })
+  try {
+    const { client, calls } = payer('ok')
+    await assert.rejects(payAndOpen(agent, provider.getMultiaddrs()[0], PROTOCOL, client, { request: { root: 'bafyroot' } }),
+      (e: X402Error) => e.code === 'payee_mismatch')
+    assert.equal(calls(), 0)
+  } finally { await close() }
+})
+
+test('manual settle: handler fails before settle and no settlement happens', async () => {
+  const { provider, agent, settles, close } = await setup({
+    settle: 'manual',
+    handler: async (ctx) => { await ctx.lp.read(); await ctx.fail('resource_invalid', 'block 3 hash mismatch') }
+  })
+  try {
+    const { lp } = await payAndOpen(agent, provider.getMultiaddrs()[0], PROTOCOL, payer('ok').client, { settle: 'manual' })
+    await lp.write(new TextEncoder().encode('tampered car'))
+    await assert.rejects(awaitSettlement(lp), (e: X402Error) => e.code === 'resource_invalid')
+    assert.equal(settles(), 0)
+  } finally { await close() }
+})
+
+test('manual settle: handler settles then replies', async () => {
+  const { provider, agent, settles, close } = await setup({
+    settle: 'manual',
+    handler: async (ctx) => { const body = await ctx.lp.read(); await ctx.settle(); await ctx.lp.write(body) }
+  })
+  try {
+    const { lp } = await payAndOpen(agent, provider.getMultiaddrs()[0], PROTOCOL, payer('ok').client, { settle: 'manual' })
+    await lp.write(new TextEncoder().encode('good car'))
+    assert.equal((await awaitSettlement(lp)).transaction, 'mocktx')
+    assert.equal(new TextDecoder().decode((await lp.read()).subarray()), 'good car')
+    assert.equal(settles(), 1)
   } finally { await close() }
 })

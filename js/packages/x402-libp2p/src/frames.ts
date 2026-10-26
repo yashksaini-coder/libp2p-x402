@@ -4,6 +4,7 @@ import type { PaymentPayload, PaymentRequired, SettleResponse } from '@x402/core
 /** One JSON object per unsigned-varint length-prefixed frame (spec/libp2p.md §Framing). */
 export type Frame =
   | { type: 'x402/payment-required', paymentRequired: PaymentRequired }
+  | { type: 'x402/request', request: Record<string, unknown> }
   | { type: 'x402/payment', paymentPayload: PaymentPayload }
   | { type: 'x402/settlement', settlementResponse: SettleResponse }
   | { type: 'x402/error', code: string, message?: string, paymentRequired?: PaymentRequired }

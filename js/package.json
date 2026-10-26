@@ -1,0 +1,5 @@
+{
+  "name": "libp2p-x402",
+  "private": true,
+  "workspaces": ["packages/*", "apps/swarm"]
+}
