@@ -1,0 +1,37 @@
+{
+  "name": "ipfs-x402",
+  "version": "0.0.1",
+  "description": "Paid IPFS between peers: pin and fetch DAGs over libp2p, paid with x402",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@helia/unixfs": "^8.0.9",
+    "@libp2p/crypto": "^5.2.0",
+    "@libp2p/identify": "^4.1.18",
+    "@libp2p/noise": "^17.0.7",
+    "@libp2p/peer-id": "^6.0.18",
+    "@libp2p/tcp": "^11.0.32",
+    "@libp2p/yamux": "^8.0.7",
+    "@multiformats/multiaddr": "^13.0.3",
+    "@types/node": "^26.6.5",
+    "libp2p": "^3.5.1",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@helia/car": "^6.0.9",
+    "@ipld/car": "^5.4.7",
+    "@ipld/dag-json": "^11.0.1",
+    "@libp2p/interface": "^3.4.0",
+    "@libp2p/utils": "^7.4.5",
+    "@x402/core": "^2.28.0",
+    "helia": "^7.1.16",
+    "multiformats": "^14.0.5",
+    "x402-libp2p": "*",
+    "@helia/libp2p": "^2.1.5"
+  }
+}
