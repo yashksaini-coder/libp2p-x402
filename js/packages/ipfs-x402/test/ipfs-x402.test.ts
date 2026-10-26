@@ -148,3 +148,19 @@ test('pinning the same root twice succeeds both times (renewal), never charging 
     assert.equal(settles(), 2)
   } finally { await stop() }
 })
+
+test('declined settlement leaves no pin and no new blocks behind', async () => {
+  const [provider, agent] = await Promise.all([heliaNode(), heliaNode()])
+  try {
+    const mock = await mockServer({ settleOk: false })
+    await provider.libp2p.handle(PIN_PROTOCOL, pinHandler(provider, mock.server, pricingFor(provider), { maxBytes: 1_000_000, durationDays: 30 }))
+    const { root } = await addFile(agent)
+    await assert.rejects(pinPaid(agent.libp2p, provider.libp2p.getMultiaddrs()[0], await carOf(agent, root), root, mockClient()),
+      (e: X402Error) => e.code === 'insufficient_funds')
+    assert.equal(mock.settles(), 1)
+    // The error frame reaches the client before the provider finishes rolling back: wait for it, bounded.
+    for (let i = 0; i < 40 && await provider.blockstore.has(root); i++) await new Promise(resolve => setTimeout(resolve, 50))
+    assert.equal(await provider.pins.isPinned(root), false)
+    assert.equal(await provider.blockstore.has(root), false, 'unpaid blocks must not stay in the store')
+  } finally { await Promise.all([provider.stop(), agent.stop()]) }
+})

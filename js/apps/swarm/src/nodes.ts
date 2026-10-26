@@ -10,6 +10,7 @@ import { webRTC } from '@libp2p/webrtc'
 import { webSockets } from '@libp2p/websockets'
 import type { PrivateKey } from '@libp2p/interface'
 import type { CID } from 'multiformats/cid'
+import { localOnlyRouting } from 'ipfs-x402'
 
 export type Node = HeliaWithLibp2p<any>
 
@@ -28,7 +29,7 @@ export async function heliaNode (privateKey: PrivateKey, opts: { dialsTabs?: boo
       connectionEncrypters: [noise()],
       streamMuxers: [yamux()],
       peerDiscovery: [],
-      services: { identify: identify() }
+      services: { identify: identify(), routing: localOnlyRouting() }
     } as any
   })
   await helia.start()

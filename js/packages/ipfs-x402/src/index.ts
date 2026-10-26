@@ -3,3 +3,4 @@ export { FETCH_PROTOCOL, PIN_PROTOCOL, price, rateCard, memoFor, type Pricing } 
 export { fetchHandler, fetchPaid, parseRoot, type FetchHooks, type FetchResult } from './fetch.ts'
 export { pinHandler, pinPaid, type PinOptions, type PinHooks, type PinReply } from './pin.ts'
 export { putReceipt, getReceipt, type Receipt } from './receipt.ts'
+export { localOnlyRouting } from './routing.ts'

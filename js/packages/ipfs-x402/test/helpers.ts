@@ -12,7 +12,7 @@ import { x402ResourceServer, type FacilitatorClient } from '@x402/core/server'
 import type { PaymentRequirements, SchemeNetworkClient, SchemeNetworkServer } from '@x402/core/types'
 import type { CID } from 'multiformats/cid'
 import { payeeFromPeerId } from 'x402-libp2p'
-import type { Pricing } from '../src/index.ts'
+import { localOnlyRouting, type Pricing } from '../src/index.ts'
 
 export const DEVNET = 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1' as const
 
@@ -24,7 +24,7 @@ export async function heliaNode (): Promise<Helia> {
       connectionEncrypters: [noise()],
       streamMuxers: [yamux()],
       peerDiscovery: [],
-      services: { identify: identify() }
+      services: { identify: identify(), routing: localOnlyRouting() }
     } as any
   })
   await helia.start()
@@ -40,12 +40,16 @@ const schemeServer: SchemeNetworkServer = {
   enhancePaymentRequirements: async (r: PaymentRequirements) => r
 }
 
-export async function mockServer (): Promise<{ server: x402ResourceServer, settles: () => number, memos: string[] }> {
+export async function mockServer (opts: { settleOk?: boolean } = {}): Promise<{ server: x402ResourceServer, settles: () => number, memos: string[] }> {
   let n = 0
   const memos: string[] = []
   const facilitator: FacilitatorClient = {
     verify: async () => ({ isValid: true, payer: 'agentAddr' }),
-    settle: async (_p, r) => { n++; memos.push(String(r.extra?.memo)); return { success: true, transaction: `mocktx${n}`, network: r.network, payer: 'agentAddr' } },
+    settle: async (_p, r) => {
+      n++; memos.push(String(r.extra?.memo))
+      if (opts.settleOk === false) return { success: false, errorReason: 'insufficient_funds', transaction: '', network: r.network }
+      return { success: true, transaction: `mocktx${n}`, network: r.network, payer: 'agentAddr' }
+    },
     getSupported: async () => ({ kinds: [{ x402Version: 2, scheme: 'mock', network: DEVNET }], extensions: [], signers: {} })
   }
   const server = new x402ResourceServer(facilitator).register(DEVNET, schemeServer)
