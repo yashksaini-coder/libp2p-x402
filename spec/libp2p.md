@@ -24,6 +24,7 @@ This transport defines only how existing x402 v2 objects (`PaymentRequired`, `Pa
 | `type` | Direction | Body field |
 | --- | --- | --- |
 | `x402/payment-required` | server → client | `paymentRequired`: `PaymentRequired` |
+| `x402/request` | client → server | `request`: application object that determines the price (optional step) |
 | `x402/payment` | client → server | `paymentPayload`: `PaymentPayload` |
 | `x402/settlement` | server → client | `settlementResponse`: `SettlementResponse` |
 | `x402/error` | server → client | `code`, optional `message`, optional `paymentRequired` |
@@ -78,6 +79,17 @@ Why the server speaks first: a libp2p stream has no request line or headers befo
   }
 }
 ```
+
+### Invoices: pricing a specific request
+
+The first `x402/payment-required` is a **rate card**: it is sent before the server knows what the client wants. Some protocols can only price a request once they see it. For example, a fetch is priced on the size of the requested DAG, and its memo names the root CID. For these:
+
+1. After reading the rate card, the client MAY send one `x402/request` frame carrying the application's request object, without paying.
+2. The server answers with a further `x402/payment-required` frame, the **invoice**, or with `x402/error` if it refuses the request.
+3. **A later `x402/payment-required` supersedes every earlier one on the stream.** The client pays the latest one, and the server matches the payment against it.
+4. The client MUST apply the [payee identity](#payee-identity) check to the invoice it pays, not only to the rate card.
+
+A server that does not support invoices answers `x402/request` with `x402/error` `invalid_frame`.
 
 ## Payment Payload Transmission
 
