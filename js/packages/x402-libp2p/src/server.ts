@@ -49,9 +49,9 @@ export function paid (server: x402ResourceServer, opts: PaidOptions, handler: (c
     const lp = lpStream(stream, { maxDataLength: MAX_FRAME_BYTES })
     let reported = false
     const fail = async (code: string, message?: string, paymentRequired?: PaymentRequired): Promise<void> => {
-      reported = true
       await writeFrame(lp, { type: 'x402/error', code, message, paymentRequired })
       await stream.close() // close, not abort: a reset could drop the error frame in flight
+      reported = true // only once the peer has it; if either step threw, the catch resets the stream
     }
 
     try {
