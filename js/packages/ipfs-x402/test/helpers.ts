@@ -79,14 +79,12 @@ export async function carOf (helia: Helia, root: CID): Promise<Uint8Array> {
 
 /** Flip one byte inside the payload of block `index`; returns a CAR that still parses. */
 export async function tamper (carBytes: Uint8Array, index: number): Promise<Uint8Array> {
-  const { CarReader } = await import('@ipld/car')
-  const reader = await CarReader.fromBytes(carBytes)
+  const { CarIndexer } = await import('@ipld/car')
   let i = 0
-  for await (const b of reader.blocks()) {
+  for await (const { blockOffset, blockLength } of await CarIndexer.fromBytes(carBytes)) {
     if (i++ !== index) continue
-    const at = Buffer.from(carBytes).indexOf(Buffer.from(b.bytes))
     const out = Uint8Array.from(carBytes)
-    out[at + b.bytes.byteLength - 1] ^= 0xff
+    out[blockOffset + blockLength - 1] ^= 0xff
     return out
   }
   throw new Error('no such block')

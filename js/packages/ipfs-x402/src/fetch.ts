@@ -6,7 +6,7 @@ import type { PaymentRequired, SettleResponse } from '@x402/core/types'
 import type { HeliaWithLibp2p } from '@helia/libp2p'
 type Helia = HeliaWithLibp2p<any>
 import { CID } from 'multiformats/cid'
-import { X402Error, paid, payAndOpen } from 'x402-libp2p'
+import { X402Error, paid, payAndOpen, type PayHooks } from 'x402-libp2p'
 import { exportCar, receiveCar, sendCar, verifyCar, type Block, type BlockCheck } from './car.ts'
 import { FETCH_PROTOCOL, memoFor, price, rateCard, type Pricing } from './pricing.ts'
 
@@ -64,8 +64,8 @@ export interface FetchResult {
 }
 
 /** Pay a peer for a DAG and get it back hash-verified. */
-export async function fetchPaid (node: Libp2p, peer: PeerId | Multiaddr, root: CID, client: x402Client, opts: { onBlock?: (b: BlockCheck) => void, maxBytes?: number, signal?: AbortSignal } = {}): Promise<FetchResult> {
-  const { lp, stream, settlement, paymentRequired } = await payAndOpen(node, peer, FETCH_PROTOCOL, client, { request: { root: root.toString() }, signal: opts.signal })
+export async function fetchPaid (node: Libp2p, peer: PeerId | Multiaddr, root: CID, client: x402Client, opts: { onBlock?: (b: BlockCheck) => void, maxBytes?: number, signal?: AbortSignal, hooks?: PayHooks } = {}): Promise<FetchResult> {
+  const { lp, stream, settlement, paymentRequired } = await payAndOpen(node, peer, FETCH_PROTOCOL, client, { request: { root: root.toString() }, signal: opts.signal, hooks: opts.hooks })
   try {
     const car = await receiveCar(lp, opts.maxBytes ?? 64 * 1024 * 1024, opts.signal)
     const { blocks, bytes } = await verifyCar(car, root, opts.onBlock)

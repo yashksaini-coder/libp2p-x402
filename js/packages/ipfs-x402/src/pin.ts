@@ -6,7 +6,7 @@ import type { SettleResponse } from '@x402/core/types'
 import type { HeliaWithLibp2p } from '@helia/libp2p'
 type Helia = HeliaWithLibp2p<any>
 import type { CID } from 'multiformats/cid'
-import { X402Error, awaitSettlement, paid, payAndOpen } from 'x402-libp2p'
+import { X402Error, awaitSettlement, paid, payAndOpen, type PayHooks } from 'x402-libp2p'
 import { receiveCar, sendCar, verifyCar, type BlockCheck } from './car.ts'
 import { parseRoot } from './fetch.ts'
 import { PIN_PROTOCOL, memoFor, price, rateCard, type Pricing } from './pricing.ts'
@@ -82,8 +82,8 @@ export function pinHandler (helia: Helia, server: x402ResourceServer, pricing: P
 }
 
 /** Pay a peer to pin `car` (a CAR whose single root is `root`). */
-export async function pinPaid (node: Libp2p, peer: PeerId | Multiaddr, car: Uint8Array, root: CID, client: x402Client, opts: { signal?: AbortSignal } = {}): Promise<PinReply & { settlement: SettleResponse }> {
-  const { lp, stream } = await payAndOpen(node, peer, PIN_PROTOCOL, client, { request: { root: root.toString(), bytes: car.byteLength }, settle: 'manual', signal: opts.signal })
+export async function pinPaid (node: Libp2p, peer: PeerId | Multiaddr, car: Uint8Array, root: CID, client: x402Client, opts: { signal?: AbortSignal, hooks?: PayHooks } = {}): Promise<PinReply & { settlement: SettleResponse }> {
+  const { lp, stream } = await payAndOpen(node, peer, PIN_PROTOCOL, client, { request: { root: root.toString(), bytes: car.byteLength }, settle: 'manual', signal: opts.signal, hooks: opts.hooks })
   try {
     await sendCar(lp, car)
     const settlement = await awaitSettlement(lp, opts.signal)

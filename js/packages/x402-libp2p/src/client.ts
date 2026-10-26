@@ -2,7 +2,7 @@ import type { Libp2p, PeerId, Stream } from '@libp2p/interface'
 import type { Multiaddr } from '@multiformats/multiaddr'
 import { lpStream, type LengthPrefixedStream } from '@libp2p/utils'
 import type { x402Client } from '@x402/core/client'
-import type { PaymentRequired, SettleResponse } from '@x402/core/types'
+import type { PaymentPayload, PaymentRequired, SettleResponse } from '@x402/core/types'
 import { MAX_FRAME_BYTES, X402Error, readFrame, writeFrame } from './frames.ts'
 import { selectPayable } from './identity.ts'
 
@@ -22,6 +22,14 @@ export interface PayOptions {
   /** Must match the protocol's server mode. Default `before`. */
   settle?: 'before' | 'manual'
   signal?: AbortSignal
+  /** Observability hooks (dashboards, logs). Called in protocol order. */
+  hooks?: PayHooks
+}
+
+export interface PayHooks {
+  onPaymentRequired?: (paymentRequired: PaymentRequired, invoice: boolean) => void
+  onPayeeCheck?: (check: { payTo: string, remotePeer: PeerId, ok: boolean }) => void
+  onPayment?: (payload: PaymentPayload) => void
 }
 
 /** Read the next frame and expect `x402/settlement`; an `x402/error` frame throws. */
@@ -49,17 +57,22 @@ export async function payAndOpen (node: Libp2p, peer: PeerId | Multiaddr, protoc
   const lp = lpStream(stream, { maxDataLength: MAX_FRAME_BYTES })
 
   try {
+    const hooks = opts.hooks ?? {}
     let paymentRequired = await expectPaymentRequired(lp, opts.signal) // the rate card
+    hooks.onPaymentRequired?.(paymentRequired, false)
     if (opts.request != null) {
       await writeFrame(lp, { type: 'x402/request', request: opts.request })
       paymentRequired = await expectPaymentRequired(lp, opts.signal) // the invoice supersedes it
+      hooks.onPaymentRequired?.(paymentRequired, true)
     }
 
     // Check the payee against the authenticated remote peer *before* signing anything.
     const accepts = selectPayable(paymentRequired.accepts, connection.remotePeer)
+    hooks.onPayeeCheck?.({ payTo: paymentRequired.accepts[0]?.payTo ?? '', remotePeer: connection.remotePeer, ok: accepts.length > 0 })
     if (accepts.length === 0) throw new X402Error('payee_mismatch', 'no requirement pays the remote peer', paymentRequired)
 
     const paymentPayload = await client.createPaymentPayload({ ...paymentRequired, accepts })
+    hooks.onPayment?.(paymentPayload)
     await writeFrame(lp, { type: 'x402/payment', paymentPayload })
 
     if (opts.settle === 'manual') return { lp, stream, paymentRequired }
