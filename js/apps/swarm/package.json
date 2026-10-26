@@ -1,0 +1,37 @@
+{
+  "name": "swarm",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "start": "node src/main.ts"
+  },
+  "dependencies": {
+    "@helia/car": "^6.0.9",
+    "@helia/libp2p": "^2.1.5",
+    "@helia/unixfs": "^8.0.9",
+    "@ipld/car": "^5.4.7",
+    "@libp2p/crypto": "^5.2.0",
+    "@libp2p/identify": "^4.1.18",
+    "@libp2p/interface": "^3.4.0",
+    "@libp2p/noise": "^17.0.7",
+    "@libp2p/peer-id": "^6.0.18",
+    "@libp2p/tcp": "^11.0.32",
+    "@libp2p/yamux": "^8.0.7",
+    "@solana/kit": "^8.5.0",
+    "@x402/core": "^2.28.0",
+    "@x402/svm": "^2.28.0",
+    "helia": "^7.1.16",
+    "ipfs-unixfs-importer": "^17.1.1",
+    "ipfs-x402": "*",
+    "kubo": "^0.43.1",
+    "multiformats": "^14.0.5",
+    "x402-libp2p": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}
