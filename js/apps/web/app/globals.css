@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@theme {
+  --color-stage: #000000;
+  --color-panel: #181818;
+  --color-raised: #1f1f1f;
+  --color-hover: #272727;
+  --color-line: rgb(255 255 255 / 0.08);
+  --color-muted: #9b9b9b;
+  --color-settled: #14f195;
+  --color-rejected: #ff4757;
+  --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-io: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+html {
+  color-scheme: dark;
+  background: #000;
+}
+
+body {
+  background: #000;
+  color: #fff;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { text-wrap: balance; }
+p, li, dd, td { text-wrap: pretty; }
+
+:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* Mono data: tabular numbers so ms and amounts never jitter. */
+.font-mono { font-variant-numeric: tabular-nums; }
+
+/* Scroll reveal: heavy fade up (landing-page-design B7). */
+.reveal {
+  opacity: 0;
+  transform: translateY(4rem);
+  filter: blur(12px);
+  transition: opacity 900ms var(--ease-out), transform 900ms var(--ease-out), filter 900ms var(--ease-out);
+  transition-delay: var(--d, 0ms);
+}
+.reveal.in { opacity: 1; transform: none; filter: none; }
+
+/* Bento card rise (design-to-motion B2, card kind). */
+.card-rise {
+  opacity: 0;
+  transform: translateY(24px) scale(0.985);
+  filter: blur(6px);
+  transition: transform 900ms cubic-bezier(0.16, 1, 0.3, 1), opacity 600ms cubic-bezier(0.33, 1, 0.68, 1), filter 700ms cubic-bezier(0.33, 1, 0.68, 1);
+  transition-delay: var(--d, 0ms);
+}
+.in .card-rise, .card-rise.in { opacity: 1; transform: none; filter: none; }
+
+/* Hero mockup loading intro: panels stay, contents load (design-to-motion A5, app frame). */
+.mock [data-load] {
+  opacity: 0;
+  transform: translateY(10px);
+  filter: blur(4px);
+  transition: transform 1050ms cubic-bezier(0.16, 1, 0.3, 1), opacity 750ms cubic-bezier(0.33, 1, 0.68, 1), filter 750ms cubic-bezier(0.33, 1, 0.68, 1);
+  transition-delay: var(--d, 0ms);
+}
+.mock.in [data-load] { opacity: 1; transform: none; filter: none; }
+.mock [data-load] { transition-delay: calc(var(--p, 0ms) + var(--i, 0ms)); }
+.mock .grid > :nth-child(2) { --p: 90ms; }
+.mock .grid > :nth-child(3) { --p: 180ms; }
+.mock .grid > :nth-child(4) { --p: 270ms; }
+.mock .grid > :nth-child(5) { --p: 360ms; }
+.mock .grid > * > [data-load]:not(:first-child) { --i: 200ms; }
+.mock .grid > * > [data-load]:last-child:not(:first-child) { --i: 400ms; }
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+.shake { animation: shake 420ms var(--ease-out) 1; }
+
+@keyframes flip {
+  from { transform: rotateX(90deg); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.flip { animation: flip 500ms var(--ease-out) 1; }
+
+@keyframes caret { 50% { opacity: 0; } }
+.caret { animation: caret 1s steps(1) infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+  }
+  .reveal, .card-rise, .mock [data-load] { opacity: 1; transform: none; filter: none; }
+}
