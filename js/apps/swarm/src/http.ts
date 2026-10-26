@@ -1,7 +1,9 @@
-import { createServer, type Server } from 'node:http'
+import { createServer, type IncomingMessage, type Server } from 'node:http'
+import type { FacilitatorClient } from '@x402/core/server'
 import { timingSafeEqual } from 'node:crypto'
 import type { Bus } from './bus.ts'
 import type { SwarmEventBody } from './events.ts'
+import type { SellConfig } from './shared.ts'
 
 export interface Control {
   bus: Bus
@@ -9,9 +11,22 @@ export interface Control {
   token: string
   busy: () => boolean
   runScene?: (n: 1 | 2 | 3) => Promise<void>
+  sellConfig?: () => SellConfig
+  facilitator?: FacilitatorClient
 }
 
 const LOCAL_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/
+
+const MAX_BODY = 64 * 1024
+
+async function json (req: IncomingMessage): Promise<any> {
+  let body = ''
+  for await (const chunk of req) {
+    body += chunk
+    if (body.length > MAX_BODY) throw new Error('body too large')
+  }
+  return JSON.parse(body)
+}
 
 function tokenOk (header: string | undefined, token: string): boolean {
   const given = Buffer.from(header?.replace(/^Bearer /, '') ?? '')
@@ -19,13 +34,17 @@ function tokenOk (header: string | undefined, token: string): boolean {
   return given.length === want.length && timingSafeEqual(given, want)
 }
 
-/** GET /events (SSE), POST /scenes/:n (token), GET /health. Bind to loopback only. */
+/**
+ * GET /events (SSE), POST /scenes/:n (token), GET /health. Bind to loopback only.
+ * For browser sellers: GET /sell/config, and the standard x402 facilitator API under
+ * /facilitator (verify, settle, supported; token) backed by the in-process facilitator.
+ */
 export async function serve (c: Control, port: number, host = '127.0.0.1'): Promise<{ server: Server, port: number }> {
   const server = createServer((req, res) => {
     const origin = req.headers.origin
     if (origin != null && LOCAL_ORIGIN.test(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin)
-      res.setHeader('Access-Control-Allow-Headers', 'Authorization')
+      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type')
       res.setHeader('Vary', 'Origin')
     }
     if (req.method === 'OPTIONS') { res.writeHead(204).end(); return }
@@ -47,6 +66,29 @@ export async function serve (c: Control, port: number, host = '127.0.0.1'): Prom
       if (c.busy()) { res.writeHead(409).end('a scene is running'); return }
       void c.runScene(Number(scene[1]) as 1 | 2 | 3)
       res.writeHead(202).end('started')
+      return
+    }
+
+    if (req.method === 'GET' && url.pathname === '/sell/config' && c.sellConfig != null) {
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(c.sellConfig()))
+      return
+    }
+
+    const fac = url.pathname.match(/^\/facilitator\/(verify|settle|supported)$/)
+    if (fac != null && c.facilitator != null) {
+      // Settling spends the fee payer's SOL: same token as the scene controls.
+      if (!tokenOk(req.headers.authorization, c.token)) { res.writeHead(401).end('bad token'); return }
+      const f = c.facilitator
+      const op = fac[1]
+      void (async () => {
+        if (op === 'supported') return await f.getSupported()
+        if (req.method !== 'POST') throw new Error('POST only')
+        const { paymentPayload, paymentRequirements } = await json(req)
+        return op === 'verify' ? await f.verify(paymentPayload, paymentRequirements) : await f.settle(paymentPayload, paymentRequirements)
+      })().then(
+        out => res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(out)),
+        err => res.writeHead(400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: String(err?.message ?? err) }))
+      )
       return
     }
 

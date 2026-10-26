@@ -1,13 +1,14 @@
 import { x402Client } from '@x402/core/client'
 import { x402Facilitator } from '@x402/core/facilitator'
 import { x402ResourceServer, type FacilitatorClient } from '@x402/core/server'
-import type { Network, PaymentRequirements, SchemeNetworkClient, SchemeNetworkServer } from '@x402/core/types'
+import type { Network, SchemeNetworkClient } from '@x402/core/types'
 import { USDC_DEVNET_ADDRESS, toFacilitatorSvmSigner, type FacilitatorSvmSigner } from '@x402/svm'
 import { ExactSvmScheme as ExactSvmClient } from '@x402/svm/exact/client'
 import { registerExactSvmScheme as registerFacilitatorScheme } from '@x402/svm/exact/facilitator'
 import { registerExactSvmScheme as registerServerScheme } from '@x402/svm/exact/server'
 import { createKeyPairSignerFromBytes } from '@solana/kit'
 import type { Pricing } from 'ipfs-x402'
+import { mockSchemeServer, priceFor } from './shared.ts'
 import type { Mode } from './events.ts'
 import type { KeyRole, RoleKey } from './keys.ts'
 
@@ -28,14 +29,11 @@ export interface Payments {
   /** The agent's paying client. */
   client: x402Client
   pricing: (payTo: string) => Pricing
+  /** The in-process facilitator. Browser sellers reach it over loopback HTTP; its fee-payer key never leaves this process. */
+  facilitator: FacilitatorClient
+  /** Public RPC a browser seller's `exact` scheme may use to embed a blockhash. */
+  rpcUrl?: string
 }
-
-const priceFor = (scheme: string, network: Network, asset: string) => (payTo: string): Pricing => ({
-  scheme, network, asset, payTo,
-  perMiB: 10_000n, // 0.01 USDC per MiB
-  minAmount: 1_000n, // 0.001 USDC
-  maxTimeoutSeconds: 60
-})
 
 /**
  * Devnet: real `exact` SVM payments. The facilitator runs in-process with our
@@ -74,7 +72,9 @@ export async function devnetPayments (keys: Record<KeyRole, RoleKey>, onSubmit: 
       await server.initialize()
       return server
     },
-    pricing: priceFor('exact', DEVNET, USDC_DEVNET_ADDRESS)
+    pricing: priceFor('exact', DEVNET, USDC_DEVNET_ADDRESS),
+    facilitator: facilitatorClient,
+    rpcUrl: DEVNET_RPC
   }
 }
 
@@ -84,13 +84,6 @@ export async function devnetPayments (keys: Record<KeyRole, RoleKey>, onSubmit: 
  */
 export async function mockPayments (onSubmit: OnSubmit): Promise<Payments> {
   let n = 0
-  const schemeServer: SchemeNetworkServer = {
-    scheme: 'mock',
-    defaultAssetTransferMethod: 'default',
-    paymentFlows: { default: { supported: ['authorization'], default: 'authorization' } },
-    parsePrice: async () => ({ amount: '1000', asset: 'USDC' }),
-    enhancePaymentRequirements: async (r: PaymentRequirements) => r
-  }
   const facilitator: FacilitatorClient = {
     verify: async () => ({ isValid: true, payer: 'mockAgent' }),
     settle: async (_p, r) => {
@@ -108,10 +101,11 @@ export async function mockPayments (onSubmit: OnSubmit): Promise<Payments> {
     scheme: 'mock',
     client: new x402Client().register(DEVNET, schemeClient).setSpendControls(false),
     server: async () => {
-      const server = new x402ResourceServer(facilitator).register(DEVNET, schemeServer)
+      const server = new x402ResourceServer(facilitator).register(DEVNET, mockSchemeServer)
       await server.initialize()
       return server
     },
-    pricing: priceFor('mock', DEVNET, 'USDC')
+    pricing: priceFor('mock', DEVNET, 'USDC'),
+    facilitator
   }
 }

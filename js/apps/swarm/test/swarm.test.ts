@@ -104,3 +104,26 @@ test('devnet without keys fails with guidance', async () => {
   await assert.rejects(startSwarm({ mode: 'devnet', keysDir: empty }),
     (e: Error) => /missing key files/.test(e.message) && /node src\/main\.ts keys/.test(e.message))
 })
+
+test('scene 1 buys from a tab seller: circuit, then webrtc, payee is the tab key', async () => {
+  const { generateKeyPair } = await import('@libp2p/crypto/keys')
+  const { startTabSeller } = await import('../src/tab.ts')
+  const swarm = await startSwarm({ mode: 'mock' })
+  const { server, port } = await serve({ ...swarm, token: 't0ken' }, 0)
+  const swarmUrl = `http://127.0.0.1:${port}`
+  let sold = 0
+  const tab = await startTabSeller({ swarmUrl, token: 't0ken', privateKey: await generateKeyPair('Ed25519'), onSettled: () => { sold++ } })
+  try {
+    const tabId = tab.helia.libp2p.peerId.toString()
+    while (!swarm.bus.events().some(e => e.kind === 'peer' && e.id === tabId)) await settle(50)
+    await swarm.runScene(1)
+    const ev = swarm.bus.events()
+    assert.ok(ev.some(e => e.kind === 'scene' && e.n === 1 && e.state === 'done' && /browser tab/.test(e.title)), JSON.stringify(ev.filter(e => e.kind === 'error')))
+    const opened = ev.filter(e => e.kind === 'connection' && e.to === tabId && e.state === 'open').map(e => e.kind === 'connection' && e.transport)
+    assert.deepEqual(opened, ['circuit', 'webrtc'])
+    assert.ok(ev.some(e => e.kind === 'payee-check' && e.ok && e.to === tabId && e.payTo === tab.payee))
+    assert.ok(ev.some(e => e.kind === 'payment' && e.to === tabId))
+    assert.equal(sold, 1)
+    assert.equal((await fetch(`${swarmUrl}/facilitator/supported`)).status, 401, 'facilitator needs the token')
+  } finally { await tab.stop(); server.close(); await swarm.stop() }
+})

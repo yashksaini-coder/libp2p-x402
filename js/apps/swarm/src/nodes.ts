@@ -1,24 +1,30 @@
 import { createHelia } from 'helia'
 import type { HeliaWithLibp2p } from '@helia/libp2p'
-import { unixfs } from '@helia/unixfs'
 import { car } from '@helia/car'
 import { tcp } from '@libp2p/tcp'
 import { noise } from '@libp2p/noise'
 import { yamux } from '@libp2p/yamux'
 import { identify } from '@libp2p/identify'
+import { circuitRelayTransport } from '@libp2p/circuit-relay-v2'
+import { webRTC } from '@libp2p/webrtc'
+import { webSockets } from '@libp2p/websockets'
 import type { PrivateKey } from '@libp2p/interface'
-import { fixedSize } from 'ipfs-unixfs-importer/chunker'
 import type { CID } from 'multiformats/cid'
 
 export type Node = HeliaWithLibp2p<any>
 
-/** A Helia node on loopback TCP whose PeerId is `privateKey` (= its Solana wallet). No discovery. */
-export async function heliaNode (privateKey: PrivateKey): Promise<Node> {
+export { addContent, dataset } from './shared.ts'
+
+/**
+ * A Helia node on loopback TCP whose PeerId is `privateKey` (= its Solana wallet). No discovery.
+ * `dialsTabs`: can also reach a browser tab: WebSockets to the relay, /p2p-circuit, then a WebRTC upgrade.
+ */
+export async function heliaNode (privateKey: PrivateKey, opts: { dialsTabs?: boolean } = {}): Promise<Node> {
   const helia = createHelia({
     libp2p: {
       privateKey,
       addresses: { listen: ['/ip4/127.0.0.1/tcp/0'] },
-      transports: [tcp()],
+      transports: opts.dialsTabs === true ? [tcp(), webSockets(), circuitRelayTransport(), webRTC()] : [tcp()],
       connectionEncrypters: [noise()],
       streamMuxers: [yamux()],
       peerDiscovery: [],
@@ -29,22 +35,10 @@ export async function heliaNode (privateKey: PrivateKey): Promise<Node> {
   return helia
 }
 
-/** Add bytes as a UnixFS file in small chunks, so the CAR has enough blocks to watch verify. */
-export async function addContent (node: Node, data: Uint8Array): Promise<CID> {
-  return await unixfs(node).addBytes(data, { chunker: fixedSize({ chunkSize: 16_384 }) })
-}
-
 export async function carBytes (node: Node, root: CID): Promise<Uint8Array> {
   const parts: Uint8Array[] = []
   for await (const b of car(node).export(root, { offline: true })) parts.push(b)
   return Buffer.concat(parts)
-}
-
-/** Demo payloads: readable, deterministic, a few hundred KB. */
-export function dataset (): Uint8Array {
-  const lines = Array.from({ length: 4200 }, (_, i) =>
-    JSON.stringify({ i, city: ['Mumbai', 'Pune', 'Bengaluru', 'Delhi', 'Chennai'][i % 5], aqi: 40 + ((i * 37) % 260), at: 1793000000 + i * 600 }))
-  return new TextEncoder().encode(lines.join('\n'))
 }
 
 /** Non-repeating pseudo-random bytes (xorshift32, fixed seed): every chunk is a distinct block. */

@@ -1,11 +1,16 @@
 import { FETCH_PROTOCOL, PIN_PROTOCOL, fetchHandler, fetchPaid, pinHandler, pinPaid } from 'ipfs-x402'
 import { X402Error, payeeFromPeerId, type PayHooks } from 'x402-libp2p'
+import type { PeerId } from '@libp2p/interface'
+import type { FacilitatorClient } from '@x402/core/server'
+import { multiaddr } from '@multiformats/multiaddr'
 import type { CID } from 'multiformats/cid'
 import { Bus } from './bus.ts'
 import type { Mode, Role, SwarmEventBody } from './events.ts'
 import { ephemeralKeys, loadKeys } from './keys.ts'
 import { startKubo, type Kubo } from './kubo.ts'
 import { addContent, carBytes, checkpoint, dataset, heliaNode, tamper, type Node } from './nodes.ts'
+import { startRelay } from './relay.ts'
+import type { SellConfig } from './shared.ts'
 import { devnetPayments, mockPayments, type Payments } from './payments.ts'
 import { watchDevnet, watchMock } from './txwatch.ts'
 
@@ -14,6 +19,8 @@ export interface SwarmOptions {
   keysDir?: string
   kubo?: boolean
   recordTo?: string
+  /** Loopback WebSockets port of the circuit relay browser sellers reserve on. 0 = any. */
+  relayPort?: number
 }
 
 export interface Swarm {
@@ -22,12 +29,16 @@ export interface Swarm {
   /** Runs a scene; rejects with SceneBusy if one is already running. */
   runScene: (n: 1 | 2 | 3) => Promise<void>
   busy: () => boolean
+  /** For browser sellers: GET /sell/config, and /facilitator/* to verify and settle. */
+  sellConfig: () => SellConfig
+  facilitator: FacilitatorClient
   stop: () => Promise<void>
 }
 
 export class SceneBusy extends Error {}
 
 const MAX_BYTES = 8 * 1024 * 1024
+const TAB_TITLE = 'An agent buys a dataset from a browser tab'
 const TITLES = { 1: 'An agent buys a dataset from a peer', 2: 'A tampered upload is rejected before payment', 3: 'Pay a peer to keep it, then a stock IPFS node fetches it' } as const
 
 export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
@@ -48,9 +59,9 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
   const hello = { kind: 'hello', mode: payments.mode, network: payments.network, explorer: 'https://explorer.solana.com/tx/{sig}?cluster=devnet' } as const
   bus.emit(hello)
 
-  const [agent, seller, provider] = await Promise.all([heliaNode(keys.agent.libp2p), heliaNode(keys.seller.libp2p), heliaNode(keys.provider.libp2p)])
+  const [agent, seller, provider] = await Promise.all([heliaNode(keys.agent.libp2p, { dialsTabs: true }), heliaNode(keys.seller.libp2p), heliaNode(keys.provider.libp2p)])
   const kubo: Kubo | undefined = opts.kubo === true ? await startKubo() : undefined
-  const id = (n: Node): string => n.libp2p.peerId.toString()
+  const id = (n: { libp2p: { peerId: PeerId } }): string => n.libp2p.peerId.toString()
 
   const announce = (n: Node, role: Role, label: string): void => {
     bus.emit({ kind: 'peer', id: id(n), role, label, addrs: n.libp2p.getMultiaddrs().map(String), payee: payeeFromPeerId(n.libp2p.peerId) })
@@ -59,6 +70,13 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
   announce(seller, 'seller', 'Data seller')
   announce(provider, 'provider', 'Storage provider')
   if (kubo != null) bus.emit({ kind: 'peer', id: kubo.id, role: 'kubo', label: 'Stock Kubo node', addrs: [] })
+
+  // A browser tab can only be dialled through a relay: it reserves a slot here, then serves paid fetch.
+  const relay = await startRelay(opts.relayPort ?? 0, (tab: PeerId, up: boolean) => {
+    if (up) bus.emit({ kind: 'peer', id: tab.toString(), role: 'seller', label: 'Browser tab', addrs: [], payee: payeeFromPeerId(tab) })
+    bus.emit({ kind: 'connection', from: tab.toString(), to: id(relay), transport: 'ws', state: up ? 'open' : 'closed' })
+  })
+  bus.emit({ kind: 'peer', id: id(relay), role: 'relay', label: 'Relay', addrs: [relay.addr] })
 
   // Seller sells a dataset over paid fetch; provider sells pinning.
   const datasetRoot = await addContent(seller, dataset())
@@ -70,35 +88,48 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
   }))
 
   let paymentSeq = 0
-  const agentHooks = (to: Node, protocol: string): PayHooks => ({
+  const agentHooks = (toId: string, protocol: string): PayHooks => ({
     onPaymentRequired: (pr, invoice) => {
       const r = pr.accepts[0]
-      bus.emit({ kind: 'quote', from: id(to), to: id(agent), protocol, amount: r.amount, asset: r.asset, memo: r.extra?.memo as string | undefined, invoice })
+      bus.emit({ kind: 'quote', from: toId, to: id(agent), protocol, amount: r.amount, asset: r.asset, memo: r.extra?.memo as string | undefined, invoice })
     },
     onPayeeCheck: ({ payTo, remotePeer, ok }) => {
-      bus.emit({ kind: 'payee-check', from: id(agent), to: id(to), payTo, remoteKey: payeeFromPeerId(remotePeer) ?? '', ok })
+      bus.emit({ kind: 'payee-check', from: id(agent), to: toId, payTo, remoteKey: payeeFromPeerId(remotePeer) ?? '', ok })
     },
     onPayment: (p) => {
       currentPayment = `pay-${++paymentSeq}`
       const r = p.accepted
-      bus.emit({ kind: 'payment', id: currentPayment, from: id(agent), to: id(to), protocol, amount: r.amount, asset: r.asset, network: r.network, memo: r.extra?.memo as string | undefined })
+      bus.emit({ kind: 'payment', id: currentPayment, from: id(agent), to: toId, protocol, amount: r.amount, asset: r.asset, network: r.network, memo: r.extra?.memo as string | undefined })
     }
   })
   const connected = (to: Node): void => { bus.emit({ kind: 'connection', from: id(agent), to: id(to), transport: 'tcp', state: 'open' }) }
 
   const scenes: Record<1 | 2 | 3, () => Promise<void>> = {
     1: async () => {
-      connected(seller)
-      await fetchPaid(agent.libp2p, seller.libp2p.getMultiaddrs()[0], datasetRoot, payments.client, {
-        hooks: agentHooks(seller, FETCH_PROTOCOL),
-        onBlock: b => bus.emit({ kind: 'block', requestId: currentPayment, cid: b.cid.toString(), index: b.index, total: b.total, ok: b.ok })
-      })
+      const tab = relay.tab()
+      const onBlock = (b: { cid: CID, index: number, total: number, ok: boolean }): void => { bus.emit({ kind: 'block', requestId: currentPayment, cid: b.cid.toString(), index: b.index, total: b.total, ok: b.ok }) }
+      if (tab == null) {
+        connected(seller)
+        await fetchPaid(agent.libp2p, seller.libp2p.getMultiaddrs()[0], datasetRoot, payments.client, { hooks: agentHooks(id(seller), FETCH_PROTOCOL), onBlock })
+        return
+      }
+      // Fresh connections every run, so the stage sees the upgrade happen.
+      const to = tab.toString()
+      await agent.libp2p.hangUp(tab)
+      for (const transport of ['circuit', 'webrtc'] as const) bus.emit({ kind: 'connection', from: id(agent), to, transport, state: 'closed' })
+      await agent.libp2p.dial(multiaddr(`${relay.addr}/p2p-circuit/p2p/${to}`))
+      bus.emit({ kind: 'connection', from: id(agent), to, transport: 'circuit', state: 'open' })
+      // The relayed connection is limited (time and bytes): it only carries WebRTC signalling.
+      const direct = multiaddr(`${relay.addr}/p2p-circuit/webrtc/p2p/${to}`)
+      await agent.libp2p.dial(direct)
+      bus.emit({ kind: 'connection', from: id(agent), to, transport: 'webrtc', state: 'open' })
+      await fetchPaid(agent.libp2p, direct, datasetRoot, payments.client, { hooks: agentHooks(to, FETCH_PROTOCOL), onBlock })
     },
     2: async () => {
       connected(provider)
       const bad = await tamper(await carBytes(agent, checkpointRoot), 13)
       try {
-        await pinPaid(agent.libp2p, provider.libp2p.getMultiaddrs()[0], bad, checkpointRoot, payments.client, { hooks: agentHooks(provider, PIN_PROTOCOL) })
+        await pinPaid(agent.libp2p, provider.libp2p.getMultiaddrs()[0], bad, checkpointRoot, payments.client, { hooks: agentHooks(id(provider), PIN_PROTOCOL) })
         throw new Error('provider accepted a tampered CAR')
       } catch (err) {
         if (!(err instanceof X402Error)) throw err
@@ -107,7 +138,7 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
     },
     3: async () => {
       connected(provider)
-      await pinPaid(agent.libp2p, provider.libp2p.getMultiaddrs()[0], await carBytes(agent, checkpointRoot), checkpointRoot, payments.client, { hooks: agentHooks(provider, PIN_PROTOCOL) })
+      await pinPaid(agent.libp2p, provider.libp2p.getMultiaddrs()[0], await carBytes(agent, checkpointRoot), checkpointRoot, payments.client, { hooks: agentHooks(id(provider), PIN_PROTOCOL) })
       if (kubo != null) await kuboFetch(kubo, provider, checkpointRoot)
     }
   }
@@ -128,19 +159,22 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
     runScene: async (n) => {
       if (running) throw new SceneBusy(`scene already running`)
       running = true
-      bus.emit({ kind: 'scene', n, state: 'start', title: TITLES[n] })
+      const title = n === 1 && relay.tab() != null ? TAB_TITLE : TITLES[n]
+      bus.emit({ kind: 'scene', n, state: 'start', title })
       try {
         await scenes[n]()
-        bus.emit({ kind: 'scene', n, state: 'done', title: TITLES[n] })
+        bus.emit({ kind: 'scene', n, state: 'done', title })
       } catch (err: any) {
         bus.emit({ kind: 'error', code: err?.code ?? 'scene_failed', message: String(err?.message ?? err), scene: n, settled: false })
-        bus.emit({ kind: 'scene', n, state: 'failed', title: TITLES[n] })
+        bus.emit({ kind: 'scene', n, state: 'failed', title })
       } finally {
         running = false
       }
     },
+    sellConfig: () => ({ mode: payments.mode as 'mock' | 'devnet', scheme: payments.scheme, network: payments.network, asset: payments.asset, rpcUrl: payments.rpcUrl, relay: relay.addr, root: datasetRoot.toString() }),
+    facilitator: payments.facilitator,
     stop: async () => {
-      await Promise.all([agent.stop(), seller.stop(), provider.stop(), kubo?.stop()])
+      await Promise.all([relay.libp2p.stop(), agent.stop(), seller.stop(), provider.stop(), kubo?.stop()])
     }
   }
 }
