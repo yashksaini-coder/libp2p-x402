@@ -127,3 +127,22 @@ test('scene 1 buys from a tab seller: circuit, then webrtc, payee is the tab key
     assert.equal((await fetch(`${swarmUrl}/facilitator/supported`)).status, 401, 'facilitator needs the token')
   } finally { await tab.stop(); server.close(); await swarm.stop() }
 })
+
+test('a peer that serves fetch on the relay without registering is not treated as a tab', async () => {
+  const { generateKeyPair } = await import('@libp2p/crypto/keys')
+  const { startTabSeller } = await import('../src/tab.ts')
+  const swarm = await startSwarm({ mode: 'mock' })
+  const { server, port } = await serve({ ...swarm, token: 't0ken' }, 0)
+  try {
+    await assert.rejects(startTabSeller({ swarmUrl: `http://127.0.0.1:${port}`, token: 'wrong', privateKey: await generateKeyPair('Ed25519') }), /rejected the token/)
+    // An impostor that skips /sell/register: register it under a different id, then connect with its own key.
+    const impostor = await generateKeyPair('Ed25519')
+    await swarm.allowTab((await import('@libp2p/peer-id')).peerIdFromPrivateKey(await generateKeyPair('Ed25519')).toString())
+    const orig = globalThis.fetch
+    globalThis.fetch = (async (url: any, init?: any) => String(url).endsWith('/sell/register') ? new Response(null, { status: 204 }) : await orig(url, init)) as typeof fetch
+    const tab = await startTabSeller({ swarmUrl: `http://127.0.0.1:${port}`, token: 't0ken', privateKey: impostor }).finally(() => { globalThis.fetch = orig })
+    await settle(1500)
+    assert.ok(!swarm.bus.events().some(e => e.kind === 'peer' && e.label === 'Browser tab'), 'unregistered peer accepted as a tab')
+    await tab.stop()
+  } finally { server.close(); await swarm.stop() }
+})

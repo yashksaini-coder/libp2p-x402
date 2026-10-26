@@ -4,6 +4,7 @@ import type { HeliaWithLibp2p } from '@helia/libp2p'
 import { circuitRelayTransport } from '@libp2p/circuit-relay-v2'
 import { identify, identifyPush } from '@libp2p/identify'
 import type { PrivateKey } from '@libp2p/interface'
+import { peerIdFromPrivateKey } from '@libp2p/peer-id'
 import { noise } from '@libp2p/noise'
 import { webRTC } from '@libp2p/webrtc'
 import { webSockets } from '@libp2p/websockets'
@@ -31,6 +32,15 @@ export async function startTabSeller (opts: { swarmUrl: string, token: string, p
   if (!res.ok) throw new Error(`swarm answered ${res.status} for /sell/config`)
   const config = await res.json() as SellConfig
 
+  // Prove the control token before reserving: the swarm only buys from tabs that registered.
+  const auth = { Authorization: `Bearer ${opts.token}` }
+  const reg = await fetch(`${opts.swarmUrl}/sell/register`, {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ peerId: peerIdFromPrivateKey(opts.privateKey).toString() })
+  })
+  if (!reg.ok) throw new Error(reg.status === 401 ? 'the swarm rejected the token: check NEXT_PUBLIC_SWARM_TOKEN' : `swarm answered ${reg.status} for /sell/register`)
+
   const helia = createHelia({
     libp2p: {
       privateKey: opts.privateKey,
@@ -50,7 +60,6 @@ export async function startTabSeller (opts: { swarmUrl: string, token: string, p
     const root = await addContent(helia, dataset())
     if (root.toString() !== config.root) throw new Error(`dataset root ${root} differs from the swarm's ${config.root}`)
 
-    const auth = { Authorization: `Bearer ${opts.token}` }
     const server = new x402ResourceServer(new HTTPFacilitatorClient({
       url: `${opts.swarmUrl}/facilitator`,
       createAuthHeaders: async () => ({ verify: auth, settle: auth, supported: auth })

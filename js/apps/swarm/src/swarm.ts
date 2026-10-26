@@ -2,6 +2,7 @@ import { FETCH_PROTOCOL, PIN_PROTOCOL, fetchHandler, fetchPaid, pinHandler, pinP
 import { X402Error, payeeFromPeerId, type PayHooks } from 'x402-libp2p'
 import type { PeerId } from '@libp2p/interface'
 import type { FacilitatorClient } from '@x402/core/server'
+import { peerIdFromString } from '@libp2p/peer-id'
 import { multiaddr } from '@multiformats/multiaddr'
 import type { CID } from 'multiformats/cid'
 import { Bus } from './bus.ts'
@@ -31,6 +32,8 @@ export interface Swarm {
   busy: () => boolean
   /** For browser sellers: GET /sell/config, and /facilitator/* to verify and settle. */
   sellConfig: () => SellConfig
+  /** POST /sell/register: a tab proves the control token before the relay treats it as a seller. */
+  allowTab: (peerId: string) => Promise<void>
   facilitator: FacilitatorClient
   stop: () => Promise<void>
 }
@@ -172,6 +175,7 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
       }
     },
     sellConfig: () => ({ mode: payments.mode as 'mock' | 'devnet', scheme: payments.scheme, network: payments.network, asset: payments.asset, rpcUrl: payments.rpcUrl, relay: relay.addr, root: datasetRoot.toString() }),
+    allowTab: async (peerId) => { await relay.allow(peerIdFromString(peerId)) },
     facilitator: payments.facilitator,
     stop: async () => {
       await Promise.all([relay.libp2p.stop(), agent.stop(), seller.stop(), provider.stop(), kubo?.stop()])

@@ -12,6 +12,7 @@ export interface Control {
   busy: () => boolean
   runScene?: (n: 1 | 2 | 3) => Promise<void>
   sellConfig?: () => SellConfig
+  allowTab?: (peerId: string) => Promise<void>
   facilitator?: FacilitatorClient
 }
 
@@ -36,7 +37,7 @@ function tokenOk (header: string | undefined, token: string): boolean {
 
 /**
  * GET /events (SSE), POST /scenes/:n (token), GET /health. Bind to loopback only.
- * For browser sellers: GET /sell/config, and the standard x402 facilitator API under
+ * For browser sellers: GET /sell/config, POST /sell/register { peerId } (token), and the standard x402 facilitator API under
  * /facilitator (verify, settle, supported; token) backed by the in-process facilitator.
  */
 export async function serve (c: Control, port: number, host = '127.0.0.1'): Promise<{ server: Server, port: number }> {
@@ -71,6 +72,16 @@ export async function serve (c: Control, port: number, host = '127.0.0.1'): Prom
 
     if (req.method === 'GET' && url.pathname === '/sell/config' && c.sellConfig != null) {
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(c.sellConfig()))
+      return
+    }
+
+    if (req.method === 'POST' && url.pathname === '/sell/register' && c.allowTab != null) {
+      if (!tokenOk(req.headers.authorization, c.token)) { res.writeHead(401).end('bad token'); return }
+      const allowTab = c.allowTab
+      json(req).then(async ({ peerId }) => { await allowTab(String(peerId)) }).then(
+        () => res.writeHead(204).end(),
+        err => res.writeHead(400).end(String(err?.message ?? err))
+      )
       return
     }
 
