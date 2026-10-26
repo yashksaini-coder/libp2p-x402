@@ -36,7 +36,7 @@ There is one SSE endpoint, `GET /events`. Each event is JSON, with a monotonical
 - `quote` `{ from, to, protocol, accepts }`: the `x402/payment-required` frame
 - `payee-check` `{ from, to, payTo, remoteKey, ok }`: the identity rule, shown explicitly
 - `payment` `{ id, from, to, amount, asset, network, memo }`
-- `tx` `{ paymentId, signature, status: submitted|processed|confirmed|finalized, ms }`: measured from submit, via Kit `signatureNotifications`
+- `tx` `{ paymentId, signature, status: submitted|processed|confirmed|finalized, ms }`: measured from submit. *Built as polling `getSignatureStatuses` (250 ms default, `TX_POLL_MS`), because a subscription opened after submit can miss a status that has already passed; timings are accurate to one poll interval.*
 - `block` `{ requestId, cid, index, total, ok }`: one per CAR block hash check
 - `pinned` `{ root, provider, receiptCid, expiresAt }`
 - `provided` `{ root, via: kubo-fast-provide, lookupUrl }`
