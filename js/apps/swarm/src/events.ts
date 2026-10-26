@@ -10,6 +10,7 @@ export type SwarmEventBody =
   | { kind: 'scene', n: 1 | 2 | 3, state: 'start' | 'done' | 'failed', title: string }
   | { kind: 'peer', id: string, role: Role, label: string, addrs: string[], payee?: string }
   | { kind: 'connection', from: string, to: string, transport: 'tcp' | 'webrtc' | 'circuit' | 'ws', state: 'open' | 'closed' }
+  // quote: from = the peer issuing the price (seller/provider), to = the agent being quoted
   | { kind: 'quote', from: string, to: string, protocol: string, amount: string, asset: string, memo?: string, invoice: boolean }
   | { kind: 'payee-check', from: string, to: string, payTo: string, remoteKey: string, ok: boolean }
   | { kind: 'payment', id: string, from: string, to: string, protocol: string, amount: string, asset: string, network: string, memo?: string }

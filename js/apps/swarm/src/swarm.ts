@@ -73,7 +73,7 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
   const agentHooks = (to: Node, protocol: string): PayHooks => ({
     onPaymentRequired: (pr, invoice) => {
       const r = pr.accepts[0]
-      bus.emit({ kind: 'quote', from: id(agent), to: id(to), protocol, amount: r.amount, asset: r.asset, memo: r.extra?.memo as string | undefined, invoice })
+      bus.emit({ kind: 'quote', from: id(to), to: id(agent), protocol, amount: r.amount, asset: r.asset, memo: r.extra?.memo as string | undefined, invoice })
     },
     onPayeeCheck: ({ payTo, remotePeer, ok }) => {
       bus.emit({ kind: 'payee-check', from: id(agent), to: id(to), payTo, remoteKey: payeeFromPeerId(remotePeer) ?? '', ok })
