@@ -24,14 +24,16 @@
   },
   "dependencies": {
     "@helia/car": "^6.0.9",
+    "@helia/libp2p": "^2.1.5",
     "@ipld/car": "^5.4.7",
+    "@ipld/dag-cbor": "^10.0.2",
     "@ipld/dag-json": "^11.0.1",
+    "@ipld/dag-pb": "^4.2.0",
     "@libp2p/interface": "^3.4.0",
     "@libp2p/utils": "^7.4.5",
     "@x402/core": "^2.28.0",
     "helia": "^7.1.16",
     "multiformats": "^14.0.5",
-    "x402-libp2p": "*",
-    "@helia/libp2p": "^2.1.5"
+    "x402-libp2p": "*"
   }
 }

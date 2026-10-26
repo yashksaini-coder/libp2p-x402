@@ -2,6 +2,11 @@ import type { Stream } from '@libp2p/interface'
 import type { LengthPrefixedStream } from '@libp2p/utils'
 import { car } from '@helia/car'
 import { CarReader } from '@ipld/car'
+import * as dagCbor from '@ipld/dag-cbor'
+import * as dagJson from '@ipld/dag-json'
+import * as dagPb from '@ipld/dag-pb'
+import { createUnsafe } from 'multiformats/block'
+import * as raw from 'multiformats/codecs/raw'
 import type { Helia } from 'helia'
 import { equals } from 'multiformats/bytes'
 import type { CID } from 'multiformats/cid'
@@ -39,8 +44,36 @@ export async function verifyCar (bytes: Uint8Array, root: CID, onBlock?: (b: Blo
     onBlock?.({ cid, index, total: blocks.length, ok })
     if (!ok) throw new X402Error('resource_invalid', `block ${index} (${cid}) does not match its hash`)
   }
-  // ponytail: checks every block present is genuine, not that the DAG is complete; pins.add times out on gaps.
+  assertComplete(blocks, root)
   return { blocks, bytes: bytes.byteLength }
+}
+
+const codecs = new Map<number, { code: number, decode: (b: Uint8Array) => unknown }>(
+  [dagPb, raw, dagCbor, dagJson].map(c => [c.code, c])
+)
+
+/**
+ * The CAR must be exactly the DAG under `root`: every linked block present (so
+ * pinning never fetches unpaid data from the network) and no unreachable extras
+ * (so the paid byte count is the DAG's).
+ */
+function assertComplete (blocks: Block[], root: CID): void {
+  const byCid = new Map(blocks.map(b => [b.cid.toString(), b]))
+  const seen = new Set<string>()
+  const queue: CID[] = [root]
+  while (queue.length > 0) {
+    const cid = queue.pop()!
+    const key = cid.toString()
+    if (seen.has(key)) continue
+    seen.add(key)
+    if (cid.multihash.code === identity.code) continue // data is inline in the CID
+    const block = byCid.get(key)
+    if (block == null) throw new X402Error('resource_invalid', `DAG is incomplete: ${key} is missing`)
+    const codec = codecs.get(cid.code)
+    if (codec == null) throw new X402Error('resource_invalid', `unsupported codec 0x${cid.code.toString(16)} in ${key}`)
+    for (const [, link] of createUnsafe({ bytes: block.bytes, cid, codec: codec as any }).links()) queue.push(link)
+  }
+  if (seen.size < byCid.size) throw new X402Error('resource_invalid', `${byCid.size - seen.size} blocks are not part of the DAG`)
 }
 
 async function hashMatches (cid: CID, data: Uint8Array): Promise<boolean> {
@@ -50,11 +83,19 @@ async function hashMatches (cid: CID, data: Uint8Array): Promise<boolean> {
   return equals((await sha256.digest(data)).digest, cid.multihash.digest)
 }
 
-/** Serialize a locally held DAG as a CAR. Never touches the network. */
-export async function exportCar (helia: Helia, root: CID): Promise<Uint8Array> {
+/**
+ * Serialize a locally held DAG as a CAR, refusing past `maxBytes` before
+ * buffering more. Never touches the network.
+ */
+export async function exportCar (helia: Helia, root: CID, maxBytes: number): Promise<Uint8Array> {
   if (!(await helia.blockstore.has(root))) throw new X402Error('resource_not_found', `${root} is not held here`)
   const parts: Uint8Array[] = []
-  for await (const buf of car(helia).export(root, { offline: true, signal: AbortSignal.timeout(10_000) })) parts.push(buf)
+  let total = 0
+  for await (const buf of car(helia).export(root, { offline: true, signal: AbortSignal.timeout(10_000) })) {
+    total += buf.byteLength
+    if (total > maxBytes) throw new X402Error('resource_too_large', `${root} exceeds ${maxBytes} bytes`)
+    parts.push(buf)
+  }
   return concat(parts)
 }
 

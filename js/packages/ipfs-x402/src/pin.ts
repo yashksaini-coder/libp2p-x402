@@ -61,7 +61,8 @@ export function pinHandler (helia: Helia, server: x402ResourceServer, pricing: P
 
     const settlement = await ctx.settle()
     for (const b of checked.blocks) await helia.blockstore.put(b.cid, b.bytes)
-    for await (const _ of helia.pins.add(root, { signal: AbortSignal.timeout(10_000) })) { /* drain */ }
+    // offline: verifyCar proved the DAG complete, so pinning must never reach the network
+    for await (const _ of helia.pins.add(root, { offline: true, signal: AbortSignal.timeout(10_000) } as any)) { /* drain */ }
 
     const receiptBody: Receipt = {
       cid: root.toString(),

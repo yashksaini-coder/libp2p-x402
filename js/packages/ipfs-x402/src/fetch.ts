@@ -26,21 +26,30 @@ export function parseRoot (value: unknown): CID {
  * Serve `/ipfs-x402/fetch/1.0.0`: request `{ root }`, priced `exact` on the CAR
  * size, memo `ipfs:<root>`. Settles before streaming the CAR.
  */
-export function fetchHandler (helia: Helia, server: x402ResourceServer, pricing: Pricing, hooks: FetchHooks = {}): StreamHandler {
+export function fetchHandler (helia: Helia, server: x402ResourceServer, pricing: Pricing, opts: { maxBytes: number }, hooks: FetchHooks = {}): StreamHandler {
+  // Invoices are free to request, so never re-export a DAG per request: cache its size.
+  // ponytail: unbounded per-root cache; fine for a node serving a known catalogue.
+  const sizes = new Map<string, number>()
+  const sizeOf = async (root: CID): Promise<number> => {
+    const known = sizes.get(root.toString())
+    if (known != null) return known
+    const size = (await exportCar(helia, root, opts.maxBytes)).byteLength
+    sizes.set(root.toString(), size)
+    return size
+  }
+
   return paid(server, {
     accepts: [rateCard(pricing)],
     resource: { url: `libp2p://${helia.libp2p.peerId}${FETCH_PROTOCOL}`, mimeType: 'application/vnd.ipld.car' },
     settle: 'before',
     invoice: async (request) => {
       const root = parseRoot(request.root)
-      const car = await exportCar(helia, root)
-      return [price(pricing, car.byteLength, memoFor(root))]
+      return [price(pricing, await sizeOf(root), memoFor(root))]
     }
   }, async (ctx) => {
     if (ctx.request == null) return await ctx.fail('invalid_request', 'fetch needs an x402/request with a root')
     const root = parseRoot(ctx.request.root)
-    // ponytail: exports twice (invoice + delivery); cache by request if DAGs get large.
-    const car = await exportCar(helia, root)
+    const car = await exportCar(helia, root, opts.maxBytes)
     hooks.onSettled?.({ root, peer: ctx.connection.remotePeer, settlement: await ctx.settle(), bytes: car.byteLength })
     await sendCar(ctx.lp, car)
     await ctx.stream.close()

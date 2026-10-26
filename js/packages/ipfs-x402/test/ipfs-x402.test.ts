@@ -33,7 +33,7 @@ test('fetchPaid returns blocks whose bytes equal the source file, invoice memo i
   try {
     const { root, data } = await addFile(seller)
     const { server, memos } = await mockServer()
-    await seller.libp2p.handle(FETCH_PROTOCOL, fetchHandler(seller, server, pricingFor(seller)))
+    await seller.libp2p.handle(FETCH_PROTOCOL, fetchHandler(seller, server, pricingFor(seller), { maxBytes: 1_000_000 }))
     const { blocks, settlement, paymentRequired } = await fetchPaid(agent.libp2p, seller.libp2p.getMultiaddrs()[0], root, mockClient())
     assert.equal(settlement.transaction, 'mocktx1')
     assert.equal(paymentRequired.accepts[0].extra?.memo, `ipfs:${root}`)
@@ -103,4 +103,35 @@ test('pin aborted mid-CAR settles nothing and provider keeps serving', async () 
     assert.equal(reply.pinned, root.toString())
     assert.equal(settles(), 1)
   } finally { await stop() }
+})
+
+test('pin with an incomplete DAG is rejected before settlement, without fetching from the network', async () => {
+  const { agent, addr, settles, stop } = await pinSetup()
+  try {
+    const { root } = await addFile(agent)
+    const { CarReader, CarWriter } = await import('@ipld/car')
+    const reader = await CarReader.fromBytes(await carOf(agent, root))
+    const { writer, out } = CarWriter.create([root])
+    const collected = (async () => { const p: Uint8Array[] = []; for await (const c of out) p.push(c); return Buffer.concat(p) })()
+    let i = 0
+    for await (const b of reader.blocks()) if (i++ !== 4) await writer.put(b) // drop one leaf
+    await writer.close()
+    const started = Date.now()
+    await assert.rejects(pinPaid(agent.libp2p, addr, await collected, root, mockClient()),
+      (e: X402Error) => e.code === 'resource_invalid' && /incomplete/.test(e.message))
+    assert.equal(settles(), 0)
+    assert.ok(Date.now() - started < 5000, 'must fail fast, not wait on a network fetch')
+  } finally { await stop() }
+})
+
+test('fetch of a DAG over maxBytes is refused at the invoice, before payment', async () => {
+  const [seller, agent] = await Promise.all([heliaNode(), heliaNode()])
+  try {
+    const { root } = await addFile(seller, 2_000_000)
+    const { server, settles } = await mockServer()
+    await seller.libp2p.handle(FETCH_PROTOCOL, fetchHandler(seller, server, pricingFor(seller), { maxBytes: 1_000_000 }))
+    await assert.rejects(fetchPaid(agent.libp2p, seller.libp2p.getMultiaddrs()[0], root, mockClient()),
+      (e: X402Error) => e.code === 'resource_too_large')
+    assert.equal(settles(), 0)
+  } finally { await Promise.all([seller.stop(), agent.stop()]) }
 })
