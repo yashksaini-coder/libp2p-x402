@@ -1,0 +1,30 @@
+{
+  "name": "x402-libp2p",
+  "version": "0.0.1",
+  "description": "x402 payments over libp2p streams: gate any libp2p protocol, pay automatically from the client",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@libp2p/interface": "^3.4.0",
+    "@libp2p/peer-id": "^6.0.18",
+    "@libp2p/utils": "^7.4.5",
+    "@multiformats/multiaddr": "^13.0.3",
+    "@x402/core": "^2.28.0",
+    "multiformats": "^14.0.5",
+    "uint8arrays": "^6.1.1"
+  },
+  "devDependencies": {
+    "@chainsafe/libp2p-noise": "^17.0.0",
+    "@chainsafe/libp2p-yamux": "^8.0.1",
+    "@libp2p/crypto": "^5.2.0",
+    "@libp2p/tcp": "^11.0.32",
+    "@types/node": "^26.6.5",
+    "libp2p": "^3.5.1",
+    "typescript": "^7.0.2"
+  }
+}
