@@ -135,3 +135,16 @@ test('fetch of a DAG over maxBytes is refused at the invoice, before payment', a
     assert.equal(settles(), 0)
   } finally { await Promise.all([seller.stop(), agent.stop()]) }
 })
+
+test('pinning the same root twice succeeds both times (renewal), never charging for a failed pin', async () => {
+  const { agent, addr, settles, stop } = await pinSetup()
+  try {
+    const { root } = await addFile(agent)
+    const car = await carOf(agent, root)
+    const first = await pinPaid(agent.libp2p, addr, car, root, mockClient())
+    const second = await pinPaid(agent.libp2p, addr, car, root, mockClient())
+    assert.equal(second.pinned, root.toString())
+    assert.notEqual(second.receipt, first.receipt, 'a renewal gets its own receipt')
+    assert.equal(settles(), 2)
+  } finally { await stop() }
+})

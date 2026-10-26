@@ -31,7 +31,9 @@ function declaredBytes (value: unknown): number {
 /**
  * Serve `/ipfs-x402/pin/1.0.0`: request `{ root, bytes }`, priced `exact` on the
  * declared size. Order: payment verified, CAR received, every block verified,
- * then settle, then pin. A bad CAR is rejected before any money moves.
+ * stored and pinned, then settle (unpinning if settlement fails). A bad CAR, or a
+ * pin that cannot be made, is rejected before any money moves. Re-pinning a held
+ * root is a renewal: it settles and gets a fresh receipt.
  */
 export function pinHandler (helia: Helia, server: x402ResourceServer, pricing: Pricing, opts: PinOptions, hooks: PinHooks = {}): StreamHandler {
   return paid(server, {
@@ -59,10 +61,21 @@ export function pinHandler (helia: Helia, server: x402ResourceServer, pricing: P
       return await ctx.fail(err.code, err.message)
     }
 
-    const settlement = await ctx.settle()
+    // Store and pin *before* settling: storage can be undone, a payment cannot. If anything
+    // here fails the client is never charged; if settlement fails we undo a pin we created.
     for (const b of checked.blocks) await helia.blockstore.put(b.cid, b.bytes)
-    // offline: verifyCar proved the DAG complete, so pinning must never reach the network
-    for await (const _ of helia.pins.add(root, { offline: true, signal: AbortSignal.timeout(10_000) } as any)) { /* drain */ }
+    const renewal = await helia.pins.isPinned(root)
+    if (!renewal) {
+      // offline: verifyCar proved the DAG complete, so pinning must never reach the network
+      for await (const _ of helia.pins.add(root, { offline: true, signal: AbortSignal.timeout(10_000) } as any)) { /* drain */ }
+    }
+    let settlement
+    try {
+      settlement = await ctx.settle()
+    } catch (err) {
+      if (!renewal) for await (const _ of helia.pins.rm(root)) { /* drain */ }
+      throw err
+    }
 
     const receiptBody: Receipt = {
       cid: root.toString(),
