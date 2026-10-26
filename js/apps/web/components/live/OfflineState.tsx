@@ -17,9 +17,14 @@ export function OfflineState({ link }: { link: SwarmLink }) {
         <p className="text-xl text-muted">
           Start it with <Mono className="text-white">node src/main.ts --mode devnet</Mono>
         </p>
-        <Link href="/live?demo=fixture" className="rounded-lg border border-line px-3 py-2 text-base font-semibold transition-all duration-300 ease-out hover:bg-hover active:scale-[0.98]">
-          Play the recorded replay instead
-        </Link>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Link href="/live?demo=fixture" className="rounded-lg border border-line px-3 py-2 text-base font-semibold transition-all duration-300 ease-out hover:bg-hover active:scale-[0.98]">
+            Play the recorded replay instead
+          </Link>
+          <Link href="/" className="rounded-lg px-3 py-2 text-base font-semibold text-muted transition-all duration-300 ease-out hover:bg-hover hover:text-white active:scale-[0.98]">
+            Back to home
+          </Link>
+        </div>
       </div>
     </div>
   )

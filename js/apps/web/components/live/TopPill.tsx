@@ -1,3 +1,5 @@
+import NextLink from 'next/link'
+import { ArrowLeft } from '@phosphor-icons/react/ssr'
 import type { LiveState } from '@/lib/reduce'
 import type { Link } from '@/lib/useSwarm'
 import { GlassPill, Mono, cx, usdc } from '@/components/ui'
@@ -42,11 +44,25 @@ function Counter({ label, value, unit }: { label: string, value: string, unit?: 
   )
 }
 
-export function TopPill({ state, label, children }: { state: LiveState, label: string, children?: React.ReactNode }) {
+export function HomeLink() {
+  return (
+    <NextLink
+      href="/"
+      aria-label="Back to home"
+      className="inline-flex items-center gap-2 rounded-full border border-line bg-raised px-3 py-2 text-xl font-semibold text-muted transition-all duration-300 ease-out hover:bg-hover hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white active:scale-[0.98]"
+    >
+      <ArrowLeft size={20} aria-hidden />
+      Home
+    </NextLink>
+  )
+}
+
+export function TopPill({ state, label, children, home = false }: { state: LiveState, label: string, children?: React.ReactNode, home?: boolean }) {
   const c = state.counters
   return (
     <header className="col-span-12 flex items-center justify-between gap-6">
       <GlassPill className="flex items-center gap-2 py-3 pl-3 pr-3">
+        {home && <HomeLink />}
         <ModeBadge label={label} />
         <span className="px-3 text-xl text-muted" data-load aria-live="polite">
           {state.scene ? `Scene ${state.scene.n} · ${state.scene.title}${state.scene.state === 'done' ? ' · done' : ''}` : 'Waiting for a scene'}

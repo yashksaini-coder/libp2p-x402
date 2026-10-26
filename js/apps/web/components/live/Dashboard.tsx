@@ -15,14 +15,14 @@ import { Stage } from './Stage'
 import { OfflineState } from './OfflineState'
 
 /** The 12 column stage layout. Pure view of LiveState, also used by the landing page mockup. */
-export function DashboardView({ state, label, linkable, controls, className }: {
-  state: LiveState, label: string, linkable: boolean, controls?: React.ReactNode, className?: string
+export function DashboardView({ state, label, linkable, controls, className, home = false }: {
+  state: LiveState, label: string, linkable: boolean, controls?: React.ReactNode, className?: string, home?: boolean
 }) {
   const [hover, setHover] = useState<string>()
   const [selected, setSelected] = useState<string>()
   return (
     <div className={cx('grid grid-cols-12 grid-rows-[auto_minmax(0,1fr)_minmax(0,0.62fr)] gap-6 bg-black p-8', className)}>
-      <TopPill state={state} label={label}>{controls}</TopPill>
+      <TopPill state={state} label={label} home={home}>{controls}</TopPill>
       <PeerGraph state={state} highlight={hover} selected={selected} onSelect={setSelected} />
       <TxFeed state={state} linkable={linkable} filter={selected} onHover={setHover} onClearFilter={() => setSelected(undefined)} />
       <BlockGrid state={state} />
@@ -45,6 +45,7 @@ export function LiveDashboard() {
           state={state}
           label={label}
           linkable={linkable}
+          home
           className="h-full"
           controls={fixture ? null : <SceneControls running={state.scene?.state === 'start' ? state.scene.n : undefined} tabLive={liveTab(state) != null} />}
         />
