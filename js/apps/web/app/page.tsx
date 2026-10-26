@@ -5,6 +5,7 @@ import { Reveal } from '@/components/landing/Reveal'
 import { HeroMockup } from '@/components/landing/HeroMockup'
 import { Bento } from '@/components/landing/Bento'
 import { Tagline } from '@/components/landing/Tagline'
+import { DotLink } from '@/components/landing/DotLink'
 import { COMPARE, FAQ, STEPS } from '@/components/landing/content'
 import { FaqSection } from '@/components/landing/FaqSection'
 import { REPO_URL, SPEC_URL } from '@/lib/config'
@@ -109,8 +110,14 @@ export default function Home() {
         </section>
 
         {/* 4. Tagline reveal */}
-        <section aria-label="Tagline" className="flex min-h-[50vh] items-center justify-center">
-          <Tagline />
+        <section aria-label="Tagline" className="grid min-h-[50vh] grid-cols-1 items-center gap-12 lg:grid-cols-12">
+          <div className="lg:col-span-6"><Tagline /></div>
+          <figure className="flex flex-col gap-3 lg:col-span-6">
+            <div className="relative h-48 overflow-hidden rounded-2xl border border-line bg-stage sm:h-64 lg:h-80">
+              <DotLink className="absolute inset-0 h-full w-full" />
+            </div>
+            <figcaption className="font-mono text-xs text-muted">Fig 0.2 The memo names the content; the receipt names the transaction</figcaption>
+          </figure>
         </section>
 
         {/* 5. How it works */}

@@ -17,7 +17,7 @@ export function FaqSection({ items }: { items: readonly QA[] }) {
           <DotRipple glyph={current == null ? '?' : String(current + 1)} pulse={pulse} className="absolute inset-0 h-full w-full" />
         </div>
         <figcaption className="font-mono text-xs text-muted">
-          Fig 0.4 {current == null ? 'Open a question' : `Question ${String(current + 1).padStart(2, '0')}`}
+          Fig 0.3 {current == null ? 'Open a question' : `Question ${String(current + 1).padStart(2, '0')}`}
         </figcaption>
       </figure>
       <Accordion
