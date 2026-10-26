@@ -5,7 +5,7 @@ import { SWARM_TOKEN, SWARM_URL } from '@/lib/config'
 import { cx } from '@/components/ui'
 
 const SCENES = [
-  { n: 1, title: 'Buy a dataset' },
+  { n: 1, title: 'Buy a dataset', tab: 'Sell from a tab' },
   { n: 2, title: 'Tamper' },
   { n: 3, title: 'Pay to keep it' },
 ] as const
@@ -13,7 +13,8 @@ const SCENES = [
 const LOCAL = new Set(['localhost', '127.0.0.1', '[::1]'])
 
 /** Presenter controls. Rendered only when /live is served from localhost; keys 1, 2, 3 trigger the same POST. */
-export function SceneControls({ running }: { running?: number }) {
+/** `tabLive`: a browser tab holds a relay slot, so scene 1 really buys from it. Only then does the label say so. */
+export function SceneControls({ running, tabLive }: { running?: number, tabLive?: boolean }) {
   const [local, setLocal] = useState(false)
   const [msg, setMsg] = useState<string>()
   const [busy, setBusy] = useState(false)
@@ -61,7 +62,7 @@ export function SceneControls({ running }: { running?: number }) {
           )}
         >
           <kbd className="font-mono text-sm text-muted">{s.n}</kbd>
-          {s.title}
+          {tabLive && 'tab' in s ? s.tab : s.title}
         </button>
       ))}
     </div>

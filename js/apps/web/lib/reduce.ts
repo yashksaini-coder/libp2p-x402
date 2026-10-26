@@ -38,6 +38,17 @@ export const initialState: LiveState = {
   counters: { peers: 0, usdc: 0, p50FinalizeMs: null, blocksVerified: 0 },
 }
 
+/** The transport the graph draws for an edge: the best one open, so a circuit flips to webrtc once it upgrades. */
+const RANK: Transport[] = ['webrtc', 'tcp', 'ws', 'circuit']
+export const bestTransport = (e: Edge) => RANK.find((t) => e.open.includes(t))
+
+/** A seller holding an open connection to the relay: a browser tab with a reservation, so scene 1 buys from it. */
+export function liveTab(s: LiveState): PeerNode | undefined {
+  const relays = new Set(Object.values(s.peers).filter((p) => p.role === 'relay').map((p) => p.id))
+  return Object.values(s.peers).find((p) => p.role === 'seller' &&
+    s.edges.some((e) => e.open.length > 0 && ((e.a === p.id && relays.has(e.b)) || (e.b === p.id && relays.has(e.a)))))
+}
+
 export const edgeKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`)
 
 function median(xs: number[]): number | null {

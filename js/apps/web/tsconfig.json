@@ -28,6 +28,9 @@
       ],
       "@swarm/events": [
         "../swarm/src/events.ts"
+      ],
+      "@swarm/tab": [
+        "../swarm/src/tab.ts"
       ]
     },
     "allowImportingTsExtensions": true
@@ -38,7 +41,9 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    ".next-e2e/types/**/*.ts",
+    ".next-e2e/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

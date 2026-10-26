@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import type { LiveState } from '@/lib/reduce'
+import { liveTab, type LiveState } from '@/lib/reduce'
 import { useSwarm, type Link } from '@/lib/useSwarm'
 import { cx } from '@/components/ui'
 import { TopPill, modeLabel } from './TopPill'
@@ -46,7 +46,7 @@ export function LiveDashboard() {
           label={label}
           linkable={linkable}
           className="h-full"
-          controls={fixture ? null : <SceneControls running={state.scene?.state === 'start' ? state.scene.n : undefined} />}
+          controls={fixture ? null : <SceneControls running={state.scene?.state === 'start' ? state.scene.n : undefined} tabLive={liveTab(state) != null} />}
         />
         {!fixture && link.status === 'offline' && <OfflineState link={link as Link} />}
       </Stage>

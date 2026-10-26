@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test lib/reduce.test.ts"
+    "test": "node --test lib/reduce.test.ts",
+    "e2e:sell": "node scripts/sell-e2e.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

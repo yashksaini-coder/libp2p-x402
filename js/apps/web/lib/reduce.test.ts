@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { reduce, initialState } from './reduce.ts'
+import { bestTransport, edgeKey, initialState, liveTab, reduce } from './reduce.ts'
 import { HELLO, PEERS, SCENE1, SCENE2, REPLAY, stamp } from './fixtures.ts'
 
 const fold = (steps: Parameters<typeof stamp>[0]) => stamp(steps).reduce(reduce, initialState)
@@ -38,4 +38,22 @@ test('duplicate events from a reconnect are ignored; hello rebuilds from the bac
   assert.deepEqual(twice, once)
   const rebuilt = events.reduce(reduce, once)
   assert.deepEqual(rebuilt, once)
+})
+
+test('a browser tab: label only while it holds the relay, and the edge flips circuit to webrtc', () => {
+  const [agent, relay, tab] = ['12D3agent', '12D3relay', '12D3tab']
+  const conn = (from: string, to: string, transport: 'ws' | 'circuit' | 'webrtc', state: 'open' | 'closed') => ({ dt: 0, e: { kind: 'connection' as const, from, to, transport, state } })
+  const base = [
+    { dt: 0, e: HELLO },
+    { dt: 0, e: { kind: 'peer' as const, id: agent, role: 'agent' as const, label: 'Agent', addrs: [] } },
+    { dt: 0, e: { kind: 'peer' as const, id: relay, role: 'relay' as const, label: 'Relay', addrs: [] } },
+  ]
+  assert.equal(liveTab(fold(base)), undefined)
+  const joined = [...base, { dt: 0, e: { kind: 'peer' as const, id: tab, role: 'seller' as const, label: 'Browser tab', addrs: [] } }, conn(tab, relay, 'ws', 'open')]
+  assert.equal(liveTab(fold(joined))?.id, tab)
+  const edge = (steps: typeof joined) => fold(steps).edges.find((e) => e.key === edgeKey(agent, tab))!
+  const circuit = [...joined, conn(agent, tab, 'circuit', 'open')]
+  assert.equal(bestTransport(edge(circuit)), 'circuit')
+  assert.equal(bestTransport(edge([...circuit, conn(agent, tab, 'webrtc', 'open')])), 'webrtc')
+  assert.equal(liveTab(fold([...joined, conn(tab, relay, 'ws', 'closed')])), undefined, 'tab closed: back to the Node seller label')
 })

@@ -2,7 +2,7 @@
 
 import { motion } from 'motion/react'
 import { CheckCircle, XCircle } from '@phosphor-icons/react/ssr'
-import type { Edge, LiveState, PeerNode, Transport } from '@/lib/reduce'
+import { bestTransport as best, type LiveState, type PeerNode } from '@/lib/reduce'
 import { Eyebrow, Mono, Panel, cx, short, usdc } from '@/components/ui'
 
 const W = 1000
@@ -11,7 +11,7 @@ const H = 520
 const SLOTS: Record<string, Array<[number, number]>> = {
   agent: [[160, 220], [160, 370], [160, 80]],
   relay: [[500, 380]],
-  seller: [[840, 70]],
+  seller: [[840, 70], [500, 100]], // the data seller, then a browser tab (reached via the relay below it)
   provider: [[840, 220]],
   kubo: [[840, 420]],
 }
@@ -26,9 +26,6 @@ function layout(peers: Record<string, PeerNode>) {
   }
   return pos
 }
-
-const RANK: Transport[] = ['webrtc', 'tcp', 'ws', 'circuit']
-const best = (e: Edge) => RANK.find((t) => e.open.includes(t))
 
 export function PeerGraph({ state, highlight, selected, onSelect }: {
   state: LiveState
