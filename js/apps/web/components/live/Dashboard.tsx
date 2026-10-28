@@ -35,8 +35,8 @@ export function LiveDashboard() {
   const fixture = useSearchParams().get('demo') === 'fixture'
   const { state, link } = useSwarm(fixture)
   const label = modeLabel(state, link, fixture)
-  // Explorer links only for signatures that exist on devnet: never for mock, never for fabricated fixtures.
-  const linkable = !fixture && (state.mode === 'devnet' || state.mode === 'replay')
+  // Explorer links only for signatures that exist on devnet: never for mock. The fixture replay is a real devnet recording.
+  const linkable = state.mode === 'devnet' || state.mode === 'replay'
   return (
     <main id="main">
       <h1 className="sr-only">libp2p x402 live dashboard</h1>

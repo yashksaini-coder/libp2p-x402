@@ -5,6 +5,7 @@ import { HELLO, PEERS, SCENE1, SCENE2, REPLAY, stamp } from './fixtures.ts'
 
 const fold = (steps: Parameters<typeof stamp>[0]) => stamp(steps).reduce(reduce, initialState)
 
+// The fixtures are the real devnet runs of 2026-10-28 (lib/recorded.ts).
 test('scene 1 folds into one payment with three ascending stages and every block verified', () => {
   const s = fold([{ dt: 0, e: HELLO }, ...PEERS, ...SCENE1])
   assert.equal(s.payments.length, 1)
@@ -12,19 +13,28 @@ test('scene 1 folds into one payment with three ascending stages and every block
   assert.deepEqual(p.stages.map((x) => x.status), ['processed', 'confirmed', 'finalized'])
   const ms = p.stages.map((x) => x.ms)
   assert.deepEqual(ms, [...ms].sort((a, b) => a - b))
-  assert.ok(ms[0] < ms[1] && ms[1] < ms[2])
+  // Devnet reported confirmed and finalized in the same status poll, so those two may be equal.
+  assert.ok(ms[0] < ms[1] && ms[1] <= ms[2])
+  assert.deepEqual(ms, [495, 866, 866])
   assert.equal(s.counters.blocksVerified, s.blocks.length)
+  assert.equal(s.blocks.length, 15)
   assert.ok(s.blocks.every((b) => b.ok === true))
-  assert.equal(s.counters.usdc, 2417)
-  assert.equal(s.counters.p50FinalizeMs, 12947)
+  assert.equal(s.counters.usdc, 2124)
+  assert.equal(s.counters.p50FinalizeMs, 866)
   assert.equal(s.mode, 'replay')
 })
 
-test('scene 2 leaves payments unchanged and marks exactly one red cell', () => {
+test('scene 2: the signed payment is shown unsettled with no transaction, and exactly one red cell', () => {
   const after1 = fold([{ dt: 0, e: HELLO }, ...PEERS, ...SCENE1])
   const events = stamp([{ dt: 0, e: HELLO }, ...PEERS, ...SCENE1, ...SCENE2])
   const s = events.reduce(reduce, initialState)
-  assert.deepEqual(s.payments, after1.payments)
+  // The agent signed before the provider checked the blocks; the provider refused, so nothing was submitted.
+  const [tampered, ...rest] = s.payments
+  assert.deepEqual(rest, after1.payments)
+  assert.equal(tampered.scene, 2)
+  assert.equal(tampered.unsettled, true)
+  assert.equal(tampered.signature, undefined)
+  assert.equal(s.counters.usdc, after1.counters.usdc, 'no USDC settled in scene 2')
   assert.equal(s.blocks.filter((b) => b.ok === false).length, 1)
   assert.equal(s.blocks.findIndex((b) => b.ok === false), 13)
   assert.equal(s.error?.code, 'resource_invalid')
