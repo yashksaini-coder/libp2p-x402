@@ -1,0 +1,2 @@
+swarm (devnet) on http://127.0.0.1:4422/events
+control token: <redacted>   (set NEXT_PUBLIC_SWARM_TOKEN to this in js/apps/web/.env.local, or export SWARM_TOKEN first)

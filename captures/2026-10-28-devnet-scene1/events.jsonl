@@ -1,0 +1,31 @@
+{"kind":"hello","mode":"devnet","network":"solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1","explorer":"https://explorer.solana.com/tx/{sig}?cluster=devnet","seq":1,"at":1793208808154}
+{"kind":"peer","id":"12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5","role":"agent","label":"Agent","addrs":["/ip4/127.0.0.1/tcp/33067/p2p/12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5"],"payee":"HapBbZ8eFofiqLNuoUgRP7h57kbXwXEV48iuFPp1e9o9","seq":2,"at":1793208808192}
+{"kind":"peer","id":"12D3KooWCtuZWD1k6VMpFPSi5BArUnkHBDNF15DXpJKwCZhoMQDH","role":"seller","label":"Data seller","addrs":["/ip4/127.0.0.1/tcp/35957/p2p/12D3KooWCtuZWD1k6VMpFPSi5BArUnkHBDNF15DXpJKwCZhoMQDH"],"payee":"45YPm5S2ub6KqVwHSaRWhzfSgtKbyP93rhxupaYuTTVM","seq":3,"at":1793208808192}
+{"kind":"peer","id":"12D3KooWGpBp29w2dmQhF94KmcqxPqDpbJnbecfrrZLhiKsuvHDE","role":"provider","label":"Storage provider","addrs":["/ip4/127.0.0.1/tcp/39027/p2p/12D3KooWGpBp29w2dmQhF94KmcqxPqDpbJnbecfrrZLhiKsuvHDE"],"payee":"7zpeH2MKSs9CqFYu926cd38z6yjxcvbNtxygLLj22LVJ","seq":4,"at":1793208808192}
+{"kind":"peer","id":"12D3KooWK6FipN9AAMLD1Tk94iM1xAj3auVdXGDCdctSqurynF3E","role":"relay","label":"Relay","addrs":["/ip4/127.0.0.1/tcp/4423/ws/p2p/12D3KooWK6FipN9AAMLD1Tk94iM1xAj3auVdXGDCdctSqurynF3E"],"seq":5,"at":1793208808195}
+{"kind":"scene","n":1,"state":"start","title":"An agent buys a dataset from a peer","seq":6,"at":1793208808647}
+{"kind":"connection","from":"12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5","to":"12D3KooWCtuZWD1k6VMpFPSi5BArUnkHBDNF15DXpJKwCZhoMQDH","transport":"tcp","state":"open","seq":7,"at":1793208808647}
+{"kind":"quote","from":"12D3KooWCtuZWD1k6VMpFPSi5BArUnkHBDNF15DXpJKwCZhoMQDH","to":"12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5","protocol":"/ipfs-x402/fetch/1.0.0","amount":"10000","asset":"4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU","invoice":false,"seq":8,"at":1793208809062}
+{"kind":"quote","from":"12D3KooWCtuZWD1k6VMpFPSi5BArUnkHBDNF15DXpJKwCZhoMQDH","to":"12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5","protocol":"/ipfs-x402/fetch/1.0.0","amount":"2124","asset":"4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU","memo":"QmcXofqbpDDSmWA9p2kjPzVk67eFrFKDtRyHX2GdLG7AqE","invoice":true,"seq":9,"at":1793208809197}
+{"kind":"payee-check","from":"12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5","to":"12D3KooWCtuZWD1k6VMpFPSi5BArUnkHBDNF15DXpJKwCZhoMQDH","payTo":"45YPm5S2ub6KqVwHSaRWhzfSgtKbyP93rhxupaYuTTVM","remoteKey":"45YPm5S2ub6KqVwHSaRWhzfSgtKbyP93rhxupaYuTTVM","ok":true,"seq":10,"at":1793208809197}
+{"kind":"payment","id":"pay-1","from":"12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5","to":"12D3KooWCtuZWD1k6VMpFPSi5BArUnkHBDNF15DXpJKwCZhoMQDH","protocol":"/ipfs-x402/fetch/1.0.0","amount":"2124","asset":"4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU","network":"solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1","memo":"QmcXofqbpDDSmWA9p2kjPzVk67eFrFKDtRyHX2GdLG7AqE","seq":11,"at":1793208809328}
+{"kind":"tx","paymentId":"pay-1","signature":"2xUPxmUc5bRN12oGReCrhnmA6nb3wqBYmFe1CQBh5CsLEwrdKHcjQLm9ZZngq2PDqPYbJarLbmN8Ss766i7AhmxL","status":"submitted","ms":0,"seq":12,"at":1793208809710}
+{"kind":"tx","paymentId":"pay-1","signature":"2xUPxmUc5bRN12oGReCrhnmA6nb3wqBYmFe1CQBh5CsLEwrdKHcjQLm9ZZngq2PDqPYbJarLbmN8Ss766i7AhmxL","status":"processed","ms":495,"seq":13,"at":1793208810205}
+{"kind":"tx","paymentId":"pay-1","signature":"2xUPxmUc5bRN12oGReCrhnmA6nb3wqBYmFe1CQBh5CsLEwrdKHcjQLm9ZZngq2PDqPYbJarLbmN8Ss766i7AhmxL","status":"confirmed","ms":866,"seq":14,"at":1793208810576}
+{"kind":"tx","paymentId":"pay-1","signature":"2xUPxmUc5bRN12oGReCrhnmA6nb3wqBYmFe1CQBh5CsLEwrdKHcjQLm9ZZngq2PDqPYbJarLbmN8Ss766i7AhmxL","status":"finalized","ms":866,"seq":15,"at":1793208810576}
+{"kind":"block","requestId":"pay-1","cid":"bafybeigs34rvgpu2tieobp2hgh53j4m673maw7ml6ousm5tevdj6lkjioe","index":0,"total":15,"ok":true,"seq":16,"at":1793208810608}
+{"kind":"block","requestId":"pay-1","cid":"bafkreidcvrtgp7tkohcg5g7p7hchw2e23z2p4ycgzbsbpnqwf662fl6oui","index":1,"total":15,"ok":true,"seq":17,"at":1793208810608}
+{"kind":"block","requestId":"pay-1","cid":"bafkreid3h36ugjp2vskxgkgjdguutgqkwcm62rhiehtowzhbgvo7bgovha","index":2,"total":15,"ok":true,"seq":18,"at":1793208810608}
+{"kind":"block","requestId":"pay-1","cid":"bafkreihcvijhtft2p5ts5luyj4jr6kj5ywzks2s6zdkumu7hm5bmavpzku","index":3,"total":15,"ok":true,"seq":19,"at":1793208810608}
+{"kind":"block","requestId":"pay-1","cid":"bafkreigzbxgc7hl24cbsl6inutn5nstwfsbusb7iiic5v4nxbq4whocj7m","index":4,"total":15,"ok":true,"seq":20,"at":1793208810608}
+{"kind":"block","requestId":"pay-1","cid":"bafkreiawtk3lo4d3fbzxyd36woiwdespj3v5fssottui377vo2g7swvhay","index":5,"total":15,"ok":true,"seq":21,"at":1793208810608}
+{"kind":"block","requestId":"pay-1","cid":"bafkreiaqafmcsfurqawsznjddfmnfbw7mv6otra3g3ewni73lnc4f4o2ty","index":6,"total":15,"ok":true,"seq":22,"at":1793208810608}
+{"kind":"block","requestId":"pay-1","cid":"bafkreihl2pl5qgrzmilx4pj72x5akxpradeyhx7dfzxepsazq6dktxpp5a","index":7,"total":15,"ok":true,"seq":23,"at":1793208810608}
+{"kind":"block","requestId":"pay-1","cid":"bafkreifkna4zk6dhbjjugnhzkohofeu72x3iacc5at6fkrmyzi5miwwtqq","index":8,"total":15,"ok":true,"seq":24,"at":1793208810608}
+{"kind":"block","requestId":"pay-1","cid":"bafkreicty7oelomtpaue2bskzzcxs2pxzkmnvxb65qni7lmfpmuvi2qjwm","index":9,"total":15,"ok":true,"seq":25,"at":1793208810608}
+{"kind":"block","requestId":"pay-1","cid":"bafkreidvejp2itjw4m2l7nr6rl3cabefhyhfopntbavaoeqlaneaxfpy5y","index":10,"total":15,"ok":true,"seq":26,"at":1793208810608}
+{"kind":"block","requestId":"pay-1","cid":"bafkreicczdb5il6zglerxbg4tibjwqxtsobgcgzvjqobet3zij23k4y5aa","index":11,"total":15,"ok":true,"seq":27,"at":1793208810608}
+{"kind":"block","requestId":"pay-1","cid":"bafkreifm436wde5u3g3c3u4z2qbmhnkmdpdpzzkffpt7hpiqgrvkdsbqhm","index":12,"total":15,"ok":true,"seq":28,"at":1793208810608}
+{"kind":"block","requestId":"pay-1","cid":"bafkreigqh53nkcql345gbnih7iyfxh7lvnx2ohbjfepy47rpzebvfhbt24","index":13,"total":15,"ok":true,"seq":29,"at":1793208810608}
+{"kind":"block","requestId":"pay-1","cid":"bafkreihgdslufltuswusyagjoav5itlrtksfktwihfa2mltekjnyf46tgy","index":14,"total":15,"ok":true,"seq":30,"at":1793208810608}
+{"kind":"scene","n":1,"state":"done","title":"An agent buys a dataset from a peer","seq":31,"at":1793208810608}
