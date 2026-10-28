@@ -1,0 +1,69 @@
+{"kind":"hello","mode":"devnet","network":"solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1","explorer":"https://explorer.solana.com/tx/{sig}?cluster=devnet","seq":1,"at":1793208970420}
+{"kind":"peer","id":"12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5","role":"agent","label":"Agent","addrs":["/ip4/127.0.0.1/tcp/38519/p2p/12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5"],"payee":"HapBbZ8eFofiqLNuoUgRP7h57kbXwXEV48iuFPp1e9o9","seq":2,"at":1793208970805}
+{"kind":"peer","id":"12D3KooWCtuZWD1k6VMpFPSi5BArUnkHBDNF15DXpJKwCZhoMQDH","role":"seller","label":"Data seller","addrs":["/ip4/127.0.0.1/tcp/40461/p2p/12D3KooWCtuZWD1k6VMpFPSi5BArUnkHBDNF15DXpJKwCZhoMQDH"],"payee":"45YPm5S2ub6KqVwHSaRWhzfSgtKbyP93rhxupaYuTTVM","seq":3,"at":1793208970805}
+{"kind":"peer","id":"12D3KooWGpBp29w2dmQhF94KmcqxPqDpbJnbecfrrZLhiKsuvHDE","role":"provider","label":"Storage provider","addrs":["/ip4/127.0.0.1/tcp/45547/p2p/12D3KooWGpBp29w2dmQhF94KmcqxPqDpbJnbecfrrZLhiKsuvHDE"],"payee":"7zpeH2MKSs9CqFYu926cd38z6yjxcvbNtxygLLj22LVJ","seq":4,"at":1793208970805}
+{"kind":"peer","id":"12D3KooWN3c5DKEwjozFeZJP8f4yD3huZR2fkGGUThdWgHnHgaD6","role":"kubo","label":"Stock Kubo node","addrs":[],"seq":5,"at":1793208970805}
+{"kind":"peer","id":"12D3KooWFAomBQdWqrgh7cKgrFgimrjYtCD6Q3C1PS1zA2akQkWR","role":"relay","label":"Relay","addrs":["/ip4/127.0.0.1/tcp/4423/ws/p2p/12D3KooWFAomBQdWqrgh7cKgrFgimrjYtCD6Q3C1PS1zA2akQkWR"],"seq":6,"at":1793208970808}
+{"kind":"scene","n":2,"state":"start","title":"A tampered upload is rejected before payment","seq":7,"at":1793208970926}
+{"kind":"connection","from":"12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5","to":"12D3KooWGpBp29w2dmQhF94KmcqxPqDpbJnbecfrrZLhiKsuvHDE","transport":"tcp","state":"open","seq":8,"at":1793208970926}
+{"kind":"quote","from":"12D3KooWGpBp29w2dmQhF94KmcqxPqDpbJnbecfrrZLhiKsuvHDE","to":"12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5","protocol":"/ipfs-x402/pin/1.0.0","amount":"10000","asset":"4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU","invoice":false,"seq":9,"at":1793208971246}
+{"kind":"quote","from":"12D3KooWGpBp29w2dmQhF94KmcqxPqDpbJnbecfrrZLhiKsuvHDE","to":"12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5","protocol":"/ipfs-x402/pin/1.0.0","amount":"4029","asset":"4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU","memo":"QmdZjUMbz3ZMwtQMrHuqh7p4wkYcZgNc1YA3GcqjY1ALP2","invoice":true,"seq":10,"at":1793208971336}
+{"kind":"payee-check","from":"12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5","to":"12D3KooWGpBp29w2dmQhF94KmcqxPqDpbJnbecfrrZLhiKsuvHDE","payTo":"7zpeH2MKSs9CqFYu926cd38z6yjxcvbNtxygLLj22LVJ","remoteKey":"7zpeH2MKSs9CqFYu926cd38z6yjxcvbNtxygLLj22LVJ","ok":true,"seq":11,"at":1793208971337}
+{"kind":"payment","id":"pay-1","from":"12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5","to":"12D3KooWGpBp29w2dmQhF94KmcqxPqDpbJnbecfrrZLhiKsuvHDE","protocol":"/ipfs-x402/pin/1.0.0","amount":"4029","asset":"4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU","network":"solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1","memo":"QmdZjUMbz3ZMwtQMrHuqh7p4wkYcZgNc1YA3GcqjY1ALP2","seq":12,"at":1793208971433}
+{"kind":"block","requestId":"pay-1","cid":"bafybeihche6wpslyiom6tsurp5x37xxa32ztd4ozcrewzffw7rdrb7mp6e","index":0,"total":27,"ok":true,"seq":13,"at":1793208971536}
+{"kind":"block","requestId":"pay-1","cid":"bafkreihkobfqfbczluv24jz63hpgqejm5nbtmvvikw7ddakld4sp3rtska","index":1,"total":27,"ok":true,"seq":14,"at":1793208971536}
+{"kind":"block","requestId":"pay-1","cid":"bafkreibo5ckxuoez4angalmvxgjz5dpko334jiqeqqzm2mwy6dnqxajgba","index":2,"total":27,"ok":true,"seq":15,"at":1793208971536}
+{"kind":"block","requestId":"pay-1","cid":"bafkreibe7qtm4gxruyeudtzfyu5vdjowqwf3ixbjrjxqkecksoiu3kxeeu","index":3,"total":27,"ok":true,"seq":16,"at":1793208971536}
+{"kind":"block","requestId":"pay-1","cid":"bafkreidlsctl3szro5vqr2ak52e7kerar5z2okdgrgffrblcu7zm6mbjba","index":4,"total":27,"ok":true,"seq":17,"at":1793208971536}
+{"kind":"block","requestId":"pay-1","cid":"bafkreiaqgthi6ctuxegkpm4blzx4i4rzz76aa6ncb36tj2567lvhyd4chq","index":5,"total":27,"ok":true,"seq":18,"at":1793208971536}
+{"kind":"block","requestId":"pay-1","cid":"bafkreib2q26pzzj3loh5sccdye4ybvnbe6n25wehuejcxq2m6f2bhxcgmu","index":6,"total":27,"ok":true,"seq":19,"at":1793208971536}
+{"kind":"block","requestId":"pay-1","cid":"bafkreiclz5r7plfxnpscwwoyqt2dimrotcukervleauuokajc7ko4mmltu","index":7,"total":27,"ok":true,"seq":20,"at":1793208971536}
+{"kind":"block","requestId":"pay-1","cid":"bafkreic77xxbqaajfznyw6syzmajswzjquoicv5s7crqgfdirzxawqitrq","index":8,"total":27,"ok":true,"seq":21,"at":1793208971536}
+{"kind":"block","requestId":"pay-1","cid":"bafkreigubt2cg4u2zbf4tak25tiycyj5krpyjad5ppke5zrh6qhingh3wi","index":9,"total":27,"ok":true,"seq":22,"at":1793208971536}
+{"kind":"block","requestId":"pay-1","cid":"bafkreigss4ohn4ukczdwd4bwnrpv2y65ch3yuegxyisyjiiif4nwmqd6au","index":10,"total":27,"ok":true,"seq":23,"at":1793208971536}
+{"kind":"block","requestId":"pay-1","cid":"bafkreieyryoydw2njuzyn5szrosypj7rdvnlelziuupi3ld2j5zfqzgzay","index":11,"total":27,"ok":true,"seq":24,"at":1793208971536}
+{"kind":"block","requestId":"pay-1","cid":"bafkreigd6hn2sx7fe7m4o5d55v3uvnrccmn5l2ehtzidqqqkqox5yjhkde","index":12,"total":27,"ok":true,"seq":25,"at":1793208971536}
+{"kind":"block","requestId":"pay-1","cid":"bafkreib62vb5ohlyokw5dmhnticzxoury76waq3ub7mwufc4357szdvhna","index":13,"total":27,"ok":false,"seq":26,"at":1793208971536}
+{"kind":"error","code":"resource_invalid","message":"block 13 (bafkreib62vb5ohlyokw5dmhnticzxoury76waq3ub7mwufc4357szdvhna) does not match its hash","scene":2,"settled":false,"seq":27,"at":1793208971537}
+{"kind":"scene","n":2,"state":"done","title":"A tampered upload is rejected before payment","seq":28,"at":1793208971537}
+{"kind":"scene","n":3,"state":"start","title":"Pay a peer to keep it, then a stock IPFS node fetches it","seq":29,"at":1793208974941}
+{"kind":"connection","from":"12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5","to":"12D3KooWGpBp29w2dmQhF94KmcqxPqDpbJnbecfrrZLhiKsuvHDE","transport":"tcp","state":"open","seq":30,"at":1793208974942}
+{"kind":"quote","from":"12D3KooWGpBp29w2dmQhF94KmcqxPqDpbJnbecfrrZLhiKsuvHDE","to":"12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5","protocol":"/ipfs-x402/pin/1.0.0","amount":"10000","asset":"4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU","invoice":false,"seq":31,"at":1793208975037}
+{"kind":"quote","from":"12D3KooWGpBp29w2dmQhF94KmcqxPqDpbJnbecfrrZLhiKsuvHDE","to":"12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5","protocol":"/ipfs-x402/pin/1.0.0","amount":"4029","asset":"4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU","memo":"QmdZjUMbz3ZMwtQMrHuqh7p4wkYcZgNc1YA3GcqjY1ALP2","invoice":true,"seq":32,"at":1793208975126}
+{"kind":"payee-check","from":"12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5","to":"12D3KooWGpBp29w2dmQhF94KmcqxPqDpbJnbecfrrZLhiKsuvHDE","payTo":"7zpeH2MKSs9CqFYu926cd38z6yjxcvbNtxygLLj22LVJ","remoteKey":"7zpeH2MKSs9CqFYu926cd38z6yjxcvbNtxygLLj22LVJ","ok":true,"seq":33,"at":1793208975126}
+{"kind":"payment","id":"pay-2","from":"12D3KooWSQBMLgiMShwDFDtLS5Rm9umuc5eAyDJy1j5vdNxuY6X5","to":"12D3KooWGpBp29w2dmQhF94KmcqxPqDpbJnbecfrrZLhiKsuvHDE","protocol":"/ipfs-x402/pin/1.0.0","amount":"4029","asset":"4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU","network":"solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1","memo":"QmdZjUMbz3ZMwtQMrHuqh7p4wkYcZgNc1YA3GcqjY1ALP2","seq":34,"at":1793208975128}
+{"kind":"block","requestId":"pay-2","cid":"bafybeihche6wpslyiom6tsurp5x37xxa32ztd4ozcrewzffw7rdrb7mp6e","index":0,"total":27,"ok":true,"seq":35,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreihkobfqfbczluv24jz63hpgqejm5nbtmvvikw7ddakld4sp3rtska","index":1,"total":27,"ok":true,"seq":36,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreibo5ckxuoez4angalmvxgjz5dpko334jiqeqqzm2mwy6dnqxajgba","index":2,"total":27,"ok":true,"seq":37,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreibe7qtm4gxruyeudtzfyu5vdjowqwf3ixbjrjxqkecksoiu3kxeeu","index":3,"total":27,"ok":true,"seq":38,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreidlsctl3szro5vqr2ak52e7kerar5z2okdgrgffrblcu7zm6mbjba","index":4,"total":27,"ok":true,"seq":39,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreiaqgthi6ctuxegkpm4blzx4i4rzz76aa6ncb36tj2567lvhyd4chq","index":5,"total":27,"ok":true,"seq":40,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreib2q26pzzj3loh5sccdye4ybvnbe6n25wehuejcxq2m6f2bhxcgmu","index":6,"total":27,"ok":true,"seq":41,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreiclz5r7plfxnpscwwoyqt2dimrotcukervleauuokajc7ko4mmltu","index":7,"total":27,"ok":true,"seq":42,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreic77xxbqaajfznyw6syzmajswzjquoicv5s7crqgfdirzxawqitrq","index":8,"total":27,"ok":true,"seq":43,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreigubt2cg4u2zbf4tak25tiycyj5krpyjad5ppke5zrh6qhingh3wi","index":9,"total":27,"ok":true,"seq":44,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreigss4ohn4ukczdwd4bwnrpv2y65ch3yuegxyisyjiiif4nwmqd6au","index":10,"total":27,"ok":true,"seq":45,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreieyryoydw2njuzyn5szrosypj7rdvnlelziuupi3ld2j5zfqzgzay","index":11,"total":27,"ok":true,"seq":46,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreigd6hn2sx7fe7m4o5d55v3uvnrccmn5l2ehtzidqqqkqox5yjhkde","index":12,"total":27,"ok":true,"seq":47,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreib62vb5ohlyokw5dmhnticzxoury76waq3ub7mwufc4357szdvhna","index":13,"total":27,"ok":true,"seq":48,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreiec5l76ij5gtntdplmtyr26gjotvokyuenao2y5cpjsrxq26cg7vq","index":14,"total":27,"ok":true,"seq":49,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreigeyhfj6codpaybftnlobzwkgliyvfm4nlqdt7i274xww5h376gkm","index":15,"total":27,"ok":true,"seq":50,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreicifimnfbhdblfiq2llch4gdwp7j2ncqw64tqd6awztgzxqf6ecs4","index":16,"total":27,"ok":true,"seq":51,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreidbg277shh2szoysidcddmuu5gne4yrjvghhzthmpm2nuybdupfma","index":17,"total":27,"ok":true,"seq":52,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreiei22k27ng6e6blqz65ixrhdci5is5d2b7gg5z7aok4qbonk2moua","index":18,"total":27,"ok":true,"seq":53,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreidtkybxmvupm23co3soxyoyb3jnfvldptexfec2lzpjio52k6tjqy","index":19,"total":27,"ok":true,"seq":54,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreicvlcn5h5bnp5nnmj4xlovp5m5u77aatwaszjwagfykxm63dzlyvi","index":20,"total":27,"ok":true,"seq":55,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreihlnxdwfrt5fb5eap476ot7w3v6nc56lv6jkmnggphsouqkvjvvfu","index":21,"total":27,"ok":true,"seq":56,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreialwg5yuk2vxkwkrcsagtqccs7ehjqdau5u6yc2eijmu2mucqyau4","index":22,"total":27,"ok":true,"seq":57,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreiax3gqgo5ieukfco4tzsqnybkumptg2cjq7y7zy4t6nxmxnewengi","index":23,"total":27,"ok":true,"seq":58,"at":1793208975227}
+{"kind":"block","requestId":"pay-2","cid":"bafkreid3qc72kolwpppgke6hmwc5zbpfuobtacjyghtbzgedxm7fpdlgka","index":24,"total":27,"ok":true,"seq":59,"at":1793208975228}
+{"kind":"block","requestId":"pay-2","cid":"bafkreihkazu23zsy6fv3xldadas56e2luyzue5bnedf7qktzurtzovkehu","index":25,"total":27,"ok":true,"seq":60,"at":1793208975228}
+{"kind":"block","requestId":"pay-2","cid":"bafkreihennho3bz7o3vyfhe2q75wij25amuzqcydmdrrio2xq2jvfwlexe","index":26,"total":27,"ok":true,"seq":61,"at":1793208975228}
+{"kind":"tx","paymentId":"pay-2","signature":"38GfwMFJChSUJTZxfyPpaYdJHoU3KCnbxSGFHMpVD6DzbQ4hWUSRWaP1oPkVUXt9iTYYpysgZkbjYp5U7EC1qceY","status":"submitted","ms":0,"seq":62,"at":1793208975422}
+{"kind":"tx","paymentId":"pay-2","signature":"38GfwMFJChSUJTZxfyPpaYdJHoU3KCnbxSGFHMpVD6DzbQ4hWUSRWaP1oPkVUXt9iTYYpysgZkbjYp5U7EC1qceY","status":"processed","ms":441,"seq":63,"at":1793208975863}
+{"kind":"tx","paymentId":"pay-2","signature":"38GfwMFJChSUJTZxfyPpaYdJHoU3KCnbxSGFHMpVD6DzbQ4hWUSRWaP1oPkVUXt9iTYYpysgZkbjYp5U7EC1qceY","status":"confirmed","ms":785,"seq":64,"at":1793208976207}
+{"kind":"tx","paymentId":"pay-2","signature":"38GfwMFJChSUJTZxfyPpaYdJHoU3KCnbxSGFHMpVD6DzbQ4hWUSRWaP1oPkVUXt9iTYYpysgZkbjYp5U7EC1qceY","status":"finalized","ms":785,"seq":65,"at":1793208976207}
+{"kind":"pinned","root":"bafybeihche6wpslyiom6tsurp5x37xxa32ztd4ozcrewzffw7rdrb7mp6e","provider":"12D3KooWGpBp29w2dmQhF94KmcqxPqDpbJnbecfrrZLhiKsuvHDE","receiptCid":"baguqeerauvulea3vsnpk4kzhua5fjt7j2axhm434hr2vfa5vmmvi6jagh24a","expiresAt":"2026-11-27T17:36:16.536Z","receipt":{"cid":"bafybeihche6wpslyiom6tsurp5x37xxa32ztd4ozcrewzffw7rdrb7mp6e","payer":"HapBbZ8eFofiqLNuoUgRP7h57kbXwXEV48iuFPp1e9o9","payee":"7zpeH2MKSs9CqFYu926cd38z6yjxcvbNtxygLLj22LVJ","network":"solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1","tx":"38GfwMFJChSUJTZxfyPpaYdJHoU3KCnbxSGFHMpVD6DzbQ4hWUSRWaP1oPkVUXt9iTYYpysgZkbjYp5U7EC1qceY","bytes":422416,"expiresAt":"2026-11-27T17:36:16.536Z"},"seq":66,"at":1793208976539}
+{"kind":"connection","from":"12D3KooWN3c5DKEwjozFeZJP8f4yD3huZR2fkGGUThdWgHnHgaD6","to":"12D3KooWGpBp29w2dmQhF94KmcqxPqDpbJnbecfrrZLhiKsuvHDE","transport":"tcp","state":"open","seq":67,"at":1793208976548}
+{"kind":"provided","root":"bafybeihche6wpslyiom6tsurp5x37xxa32ztd4ozcrewzffw7rdrb7mp6e","via":"kubo-bitswap","by":"12D3KooWN3c5DKEwjozFeZJP8f4yD3huZR2fkGGUThdWgHnHgaD6","blocks":27,"ms":562,"seq":68,"at":1793208977110}
+{"kind":"scene","n":3,"state":"done","title":"Pay a peer to keep it, then a stock IPFS node fetches it","seq":69,"at":1793208977110}
