@@ -59,6 +59,7 @@ interface SetupOpts {
   settle?: PaidOptions['settle']
   invoice?: (payee: string) => PaidOptions['invoice']
   handler?: (ctx: PaidContext) => Promise<void>
+  hooks?: PaidOptions['hooks']
 }
 
 async function setup (opts: SetupOpts = {}): Promise<{ provider: Libp2p, agent: Libp2p, settles: () => number, close: () => Promise<void> }> {
@@ -71,7 +72,8 @@ async function setup (opts: SetupOpts = {}): Promise<{ provider: Libp2p, agent: 
     accepts: [req(opts.payTo ?? payee)],
     resource: { url: `libp2p://${provider.peerId}${PROTOCOL}` },
     settle: opts.settle,
-    invoice: opts.invoice?.(payee)
+    invoice: opts.invoice?.(payee),
+    hooks: opts.hooks
   }, opts.handler ?? echo))
   return { provider, agent, settles: facilitator.settles, close: async () => { await Promise.all([provider.stop(), agent.stop()]) } }
 }
@@ -186,5 +188,28 @@ test('rate card and invoice carry what the scheme server adds (svm: the facilita
     const invoice = await payAndOpen(agent, provider.getMultiaddrs()[0], PROTOCOL, payer('ok').client, { request: { root: 'bafyroot' } })
     assert.equal(invoice.paymentRequired.accepts[0].amount, '2500')
     assert.equal(invoice.paymentRequired.accepts[0].extra?.feePayer, FEE_PAYER)
+  } finally { await close() }
+})
+
+test('gate hooks: invoice and verified fire with the remote peer', async () => {
+  const invoices: Array<{ amount: string, peer: unknown }> = []
+  const verified: Array<{ amount: string, peer: unknown }> = []
+  const { provider, agent, close } = await setup({
+    invoice: (payee) => async () => [req(payee, '2500')],
+    hooks: {
+      onInvoice: (r) => { invoices.push({ amount: r.accepts[0].amount, peer: r.peer }); throw new Error('hooks must not break the gate') },
+      onVerified: (r) => { verified.push({ amount: r.payment.accepted.amount, peer: r.peer }) }
+    }
+  })
+  try {
+    await payAndOpen(agent, provider.getMultiaddrs()[0], PROTOCOL, payer('ok').client, { request: { root: 'x' } })
+    assert.equal(invoices.length, 1)
+    assert.equal(invoices[0].amount, '2500')
+    assert.ok(agent.peerId.equals(invoices[0].peer as any))
+    assert.equal(verified.length, 1)
+    assert.equal(verified[0].amount, '2500')
+    assert.ok(agent.peerId.equals(verified[0].peer as any))
+    await assert.rejects(payAndOpen(agent, provider.getMultiaddrs()[0], PROTOCOL, payer('bad').client, { request: { root: 'x' } }))
+    assert.equal(verified.length, 1, 'a payment that fails verify fires no onVerified')
   } finally { await close() }
 })

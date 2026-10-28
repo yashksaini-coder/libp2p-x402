@@ -4,6 +4,12 @@ import type { x402ResourceServer } from '@x402/core/server'
 import type { PaymentPayload, PaymentRequired, PaymentRequirements, ResourceInfo, SettleResponse } from '@x402/core/types'
 import { MAX_FRAME_BYTES, X402Error, readFrame, writeFrame } from './frames.ts'
 
+/** Observation points for the seller. Errors thrown by a hook are swallowed: they never reach the gate. */
+export interface GateHooks {
+  onInvoice?: (r: { accepts: PaymentRequirements[], peer: PeerId }) => void
+  onVerified?: (r: { payment: PaymentPayload, requirements: PaymentRequirements, peer: PeerId }) => void
+}
+
 export interface PaidOptions {
   /** The rate card: sent as the first frame on every stream. */
   accepts: PaymentRequirements[]
@@ -23,6 +29,7 @@ export interface PaidOptions {
   paymentTimeoutMs?: number
   /** Bound on each gate write/close toward the peer, so a peer that stops reading cannot stall the server. Default 10s. */
   ioTimeoutMs?: number
+  hooks?: GateHooks
 }
 
 export interface PaidContext {
@@ -67,6 +74,8 @@ export function paid (server: x402ResourceServer, opts: PaidOptions, handler: (c
   const timeout = (): AbortSignal => AbortSignal.timeout(opts.paymentTimeoutMs ?? 30_000)
   const io = (): AbortSignal => AbortSignal.timeout(opts.ioTimeoutMs ?? 10_000)
 
+  const notify = (call: (() => void) | undefined): void => { try { call?.() } catch {} }
+
   return async (stream, connection) => {
     const lp = lpStream(stream, { maxDataLength: MAX_FRAME_BYTES })
     let reported = false
@@ -95,6 +104,7 @@ export function paid (server: x402ResourceServer, opts: PaidOptions, handler: (c
         // A later payment-required supersedes the rate card.
         paymentRequired = await server.createPaymentRequiredResponse(await enhance(server, accepts), opts.resource)
         await writeFrame(lp, { type: 'x402/payment-required', paymentRequired })
+        notify(() => opts.hooks?.onInvoice?.({ accepts: paymentRequired.accepts, peer: connection.remotePeer }))
         frame = await readFrame(lp, timeout())
       }
       if (frame.type !== 'x402/payment') return await fail('invalid_frame', `expected x402/payment, got ${frame.type}`)
@@ -105,6 +115,8 @@ export function paid (server: x402ResourceServer, opts: PaidOptions, handler: (c
 
       const verified = await server.verifyPayment(payment, requirements)
       if (!verified.isValid) return await fail(verified.invalidReason ?? 'invalid_payment', verified.invalidMessage, paymentRequired)
+
+      notify(() => opts.hooks?.onVerified?.({ payment, requirements, peer: connection.remotePeer }))
 
       let settled: Promise<SettleResponse> | undefined
       const settle = async (): Promise<SettleResponse> => {
