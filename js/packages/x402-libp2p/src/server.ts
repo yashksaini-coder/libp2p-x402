@@ -41,6 +41,25 @@ export interface PaidContext {
 }
 
 /**
+ * Run requirements through the scheme server, as x402's HTTP middleware does via buildPaymentRequirements:
+ * that is where a scheme adds what the payer needs from the facilitator (svm: extra.feePayer, a recent blockhash).
+ * The exact amount and asset pass through unchanged.
+ */
+async function enhance (server: x402ResourceServer, accepts: PaymentRequirements[]): Promise<PaymentRequirements[]> {
+  const out: PaymentRequirements[] = []
+  for (const r of accepts) {
+    out.push(...await server.buildPaymentRequirements({
+      scheme: r.scheme,
+      network: r.network,
+      payTo: r.payTo,
+      price: { amount: r.amount, asset: r.asset, extra: r.extra },
+      maxTimeoutSeconds: r.maxTimeoutSeconds
+    }))
+  }
+  return out
+}
+
+/**
  * Gate a libp2p protocol behind an x402 payment: the libp2p counterpart of
  * `@x402/express`. Nothing paid may be delivered before `settle()` resolves.
  */
@@ -59,7 +78,7 @@ export function paid (server: x402ResourceServer, opts: PaidOptions, handler: (c
 
     try {
       // Server speaks first: the rate card is both the challenge and the free quote.
-      let paymentRequired = await server.createPaymentRequiredResponse(opts.accepts, opts.resource)
+      let paymentRequired = await server.createPaymentRequiredResponse(await enhance(server, opts.accepts), opts.resource)
       await writeFrame(lp, { type: 'x402/payment-required', paymentRequired })
 
       let frame = await readFrame(lp, timeout())
@@ -74,7 +93,7 @@ export function paid (server: x402ResourceServer, opts: PaidOptions, handler: (c
           throw err
         }
         // A later payment-required supersedes the rate card.
-        paymentRequired = await server.createPaymentRequiredResponse(accepts, opts.resource)
+        paymentRequired = await server.createPaymentRequiredResponse(await enhance(server, accepts), opts.resource)
         await writeFrame(lp, { type: 'x402/payment-required', paymentRequired })
         frame = await readFrame(lp, timeout())
       }

@@ -53,6 +53,8 @@ Why the server speaks first: a libp2p stream has no request line or headers befo
 
 **Data format.** `paymentRequired` is a v2 `PaymentRequired` object, unchanged. `resource.url` SHOULD be `libp2p://<server PeerId><protocol ID>` (open question: see [Open Questions](#open-questions)).
 
+**Complete requirements.** Each `accepts` entry (in the rate card and in any invoice) MUST already carry every field its scheme adds from the facilitator, exactly as the HTTP transport's resource server produces them. For `exact` on Solana that is `extra.feePayer` and, when the server has an RPC endpoint, a recent blockhash; without `feePayer` an SVM client cannot build the payment. Implementations that build requirements by hand MUST pass them through the scheme's requirement enhancement step before sending them.
+
 **Example** (Solana devnet USDC, `exact`):
 
 ```json

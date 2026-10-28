@@ -16,19 +16,21 @@ const DEVNET = 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1' as const
 const PROTOCOL = '/x402-test/echo/1.0.0'
 
 // Mock scheme: stands in for @x402/svm so the test needs no chain. The wire format is real.
+// Like the svm scheme, it passes exact amounts through and copies the facilitator's fee payer into extra.
+const FEE_PAYER = 'FacilitatorFeePayer1111111111111111111111111'
 const mockSchemeServer: SchemeNetworkServer = {
   scheme: 'mock',
   defaultAssetTransferMethod: 'default',
   paymentFlows: { default: { supported: ['authorization'], default: 'authorization' } },
-  parsePrice: async () => ({ amount: '1000', asset: 'USDC' }),
-  enhancePaymentRequirements: async (r: PaymentRequirements) => r
+  parsePrice: async (price: any) => ({ amount: price.amount, asset: price.asset, extra: price.extra }),
+  enhancePaymentRequirements: async (r: PaymentRequirements, kind) => ({ ...r, extra: { ...r.extra, feePayer: kind.extra?.feePayer } })
 }
 function mockFacilitator (): FacilitatorClient & { settles: () => number } {
   let n = 0
   return {
     verify: async (p) => p.payload.sig === 'ok' ? { isValid: true, payer: 'agent' } : { isValid: false, invalidReason: 'invalid_signature' },
     settle: async (_p, r) => { n++; return { success: true, transaction: 'mocktx', network: r.network, payer: 'agent' } },
-    getSupported: async () => ({ kinds: [{ x402Version: 2, scheme: 'mock', network: DEVNET }], extensions: [], signers: {} }),
+    getSupported: async () => ({ kinds: [{ x402Version: 2, scheme: 'mock', network: DEVNET, extra: { feePayer: FEE_PAYER } }], extensions: [], signers: {} }),
     settles: () => n
   }
 }
@@ -171,5 +173,18 @@ test('garbage first frame resets the stream instead of leaving it open', async (
     await lp.read() // rate card
     await lp.write(new TextEncoder().encode('not json'))
     await assert.rejects(lp.read({ signal: AbortSignal.timeout(5000) }), (e: Error) => e.name !== 'TimeoutError' && e.name !== 'AbortError')
+  } finally { await close() }
+})
+
+// Regression (first devnet run, 2026-10-28): the svm client refused to pay because the gate sent requirements
+// without extra.feePayer. The scheme server's enhancePaymentRequirements must run on the rate card and the invoice.
+test('rate card and invoice carry what the scheme server adds (svm: the facilitator fee payer)', async () => {
+  const { provider, agent, close } = await setup({ invoice: (payee) => async () => [req(payee, '2500')] })
+  try {
+    const card = await payAndOpen(agent, provider.getMultiaddrs()[0], PROTOCOL, payer('ok').client)
+    assert.equal(card.paymentRequired.accepts[0].extra?.feePayer, FEE_PAYER)
+    const invoice = await payAndOpen(agent, provider.getMultiaddrs()[0], PROTOCOL, payer('ok').client, { request: { root: 'bafyroot' } })
+    assert.equal(invoice.paymentRequired.accepts[0].amount, '2500')
+    assert.equal(invoice.paymentRequired.accepts[0].extra?.feePayer, FEE_PAYER)
   } finally { await close() }
 })
