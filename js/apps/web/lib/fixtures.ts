@@ -17,6 +17,12 @@ export const ROOTS = [
   'bafybeigf22tfe73qw3nv7qxubn7hnfst2os4mex74t3ff67rqe5giezxzm',
   'bafybeiet5nqtlf7c5daijqf2z4rb7emlwfgjaru5htb6tdmam6oov6dcve',
 ]
+// The same roots as CIDv0: what the payment memo carries (ipfs-x402 memoFor; a CIDv1 memo exceeds x402's compute budget on devnet).
+export const MEMOS = [
+  'QmaGernqETiqgqR3Y6LFmtVC4uutxMeo4sn8ePqomR67N4',
+  'Qmbevs2KDxy7MUKZX1xPVYeApXWTQ8AXkNcyQ7v7PdtfVc',
+  'QmYJ4p4Fw6UchHmmLX41S5RYeKiCeKgxWqfNP52BHEHZpt',
+]
 export const RECEIPT_CID = 'baguqeeraemuunbfdv3h3l5rov6dyqbbv74lxdxvbpbfkx5mbs6pmbwdljega'
 export const SIGS = [
   '437jUVHHS1TTADHo3wBjA3avByxfe1r72m9QGEqziV5ZZS5uyfXYHZN69ieTvB15JGqExzVHa6e7c7WqxRiqn6zM',
@@ -68,9 +74,9 @@ export const SCENE1: Step[] = [
   { dt: 240, e: { kind: 'peer', id: KEYS.seller.peer, role: 'seller', label: 'Data seller', addrs: ['/ip4/127.0.0.1/tcp/40124'], payee: KEYS.seller.addr } },
   { dt: 380, e: { kind: 'connection', from: KEYS.agent.peer, to: KEYS.seller.peer, transport: 'tcp', state: 'open' } },
   { dt: 520, e: { kind: 'quote', from: KEYS.seller.peer, to: KEYS.agent.peer, protocol: FETCH, amount: '1000', asset: USDC_MINT, invoice: false } },
-  { dt: 310, e: { kind: 'quote', from: KEYS.seller.peer, to: KEYS.agent.peer, protocol: FETCH, amount: '2417', asset: USDC_MINT, memo: `ipfs:${ROOTS[0]}`, invoice: true } },
+  { dt: 310, e: { kind: 'quote', from: KEYS.seller.peer, to: KEYS.agent.peer, protocol: FETCH, amount: '2417', asset: USDC_MINT, memo: MEMOS[0], invoice: true } },
   { dt: 420, e: { kind: 'payee-check', from: KEYS.agent.peer, to: KEYS.seller.peer, payTo: KEYS.seller.addr, remoteKey: KEYS.seller.addr, ok: true } },
-  { dt: 640, e: { kind: 'payment', id: 'pay_s1_7f3c', from: KEYS.agent.peer, to: KEYS.seller.peer, protocol: FETCH, amount: '2417', asset: USDC_MINT, network: DEVNET, memo: `ipfs:${ROOTS[0]}` } },
+  { dt: 640, e: { kind: 'payment', id: 'pay_s1_7f3c', from: KEYS.agent.peer, to: KEYS.seller.peer, protocol: FETCH, amount: '2417', asset: USDC_MINT, network: DEVNET, memo: MEMOS[0] } },
   { dt: 210, e: { kind: 'tx', paymentId: 'pay_s1_7f3c', signature: SIGS[0], status: 'submitted', ms: 0 } },
   { dt: 412, e: { kind: 'tx', paymentId: 'pay_s1_7f3c', signature: SIGS[0], status: 'processed', ms: 412 } },
   { dt: 449, e: { kind: 'tx', paymentId: 'pay_s1_7f3c', signature: SIGS[0], status: 'confirmed', ms: 861 } },
@@ -84,7 +90,7 @@ export const SCENE2: Step[] = [
   { dt: 240, e: { kind: 'peer', id: KEYS.tamperer.peer, role: 'agent', label: 'Tampering agent', addrs: ['/ip4/127.0.0.1/tcp/40124'], payee: KEYS.tamperer.addr } },
   { dt: 320, e: { kind: 'connection', from: KEYS.tamperer.peer, to: KEYS.provider.peer, transport: 'tcp', state: 'open' } },
   { dt: 410, e: { kind: 'quote', from: KEYS.provider.peer, to: KEYS.tamperer.peer, protocol: PIN, amount: '1500', asset: USDC_MINT, invoice: false } },
-  { dt: 380, e: { kind: 'quote', from: KEYS.provider.peer, to: KEYS.tamperer.peer, protocol: PIN, amount: '3862', asset: USDC_MINT, memo: `ipfs:${ROOTS[1]}`, invoice: true } },
+  { dt: 380, e: { kind: 'quote', from: KEYS.provider.peer, to: KEYS.tamperer.peer, protocol: PIN, amount: '3862', asset: USDC_MINT, memo: MEMOS[1], invoice: true } },
   { dt: 360, e: { kind: 'payee-check', from: KEYS.tamperer.peer, to: KEYS.provider.peer, payTo: KEYS.provider.addr, remoteKey: KEYS.provider.addr, ok: true } },
   ...blocks('req_s2_pin', ROOTS[1], 31, 150, 13),
   { dt: 260, e: { kind: 'error', code: 'resource_invalid', message: 'Block 13 does not hash to its CID', scene: 2, settled: false } },
@@ -95,11 +101,11 @@ export const SCENE3: Step[] = [
   { dt: 0, e: { kind: 'scene', n: 3, state: 'start', title: 'Pay to keep it' } },
   { dt: 260, e: { kind: 'connection', from: KEYS.agent.peer, to: KEYS.provider.peer, transport: 'tcp', state: 'open' } },
   { dt: 390, e: { kind: 'quote', from: KEYS.provider.peer, to: KEYS.agent.peer, protocol: PIN, amount: '1500', asset: USDC_MINT, invoice: false } },
-  { dt: 370, e: { kind: 'quote', from: KEYS.provider.peer, to: KEYS.agent.peer, protocol: PIN, amount: '2791', asset: USDC_MINT, memo: `ipfs:${ROOTS[2]}`, invoice: true } },
+  { dt: 370, e: { kind: 'quote', from: KEYS.provider.peer, to: KEYS.agent.peer, protocol: PIN, amount: '2791', asset: USDC_MINT, memo: MEMOS[2], invoice: true } },
   { dt: 350, e: { kind: 'payee-check', from: KEYS.agent.peer, to: KEYS.provider.peer, payTo: KEYS.provider.addr, remoteKey: KEYS.provider.addr, ok: true } },
   ...blocks('req_s3_pin', ROOTS[2], 18, 150),
   // Pin settles only after every block verified, so the payment starts here.
-  { dt: 240, e: { kind: 'payment', id: 'pay_s3_b21e', from: KEYS.agent.peer, to: KEYS.provider.peer, protocol: PIN, amount: '2791', asset: USDC_MINT, network: DEVNET, memo: `ipfs:${ROOTS[2]}` } },
+  { dt: 240, e: { kind: 'payment', id: 'pay_s3_b21e', from: KEYS.agent.peer, to: KEYS.provider.peer, protocol: PIN, amount: '2791', asset: USDC_MINT, network: DEVNET, memo: MEMOS[2] } },
   { dt: 190, e: { kind: 'tx', paymentId: 'pay_s3_b21e', signature: SIGS[1], status: 'submitted', ms: 0 } },
   { dt: 438, e: { kind: 'tx', paymentId: 'pay_s3_b21e', signature: SIGS[1], status: 'processed', ms: 438 } },
   { dt: 469, e: { kind: 'tx', paymentId: 'pay_s3_b21e', signature: SIGS[1], status: 'confirmed', ms: 907 } },

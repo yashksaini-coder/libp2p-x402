@@ -24,7 +24,7 @@ export function parseRoot (value: unknown): CID {
 
 /**
  * Serve `/ipfs-x402/fetch/1.0.0`: request `{ root }`, priced `exact` on the CAR
- * size, memo `ipfs:<root>`. Settles before streaming the CAR.
+ * size, memo the root as CIDv0 (see memoFor). Settles before streaming the CAR.
  */
 export function fetchHandler (helia: Helia, server: x402ResourceServer, pricing: Pricing, opts: { maxBytes: number }, hooks: FetchHooks = {}): StreamHandler {
   // Invoices are free to request, so never re-export a DAG per request: cache its size.

@@ -75,14 +75,14 @@ The dashboard is a pure function of this stream. Replaying a recorded stream dri
 
 ## Protocol changes the scenes need
 
-- **Quote, then invoice (builder check Q1, my call).** The server still speaks first. Its opening `x402/payment-required` is a **rate card**: a generic price, for example per MiB, with no memo. The client then sends its application request (`{ root }`, or `{ root, bytes, maxBytes }`) *without* paying. The server answers with a second `x402/payment-required`, the **invoice**, which carries the exact amount and `extra.memo = "ipfs:<root>"`. The client pays the latest requirements it has received.
+- **Quote, then invoice (builder check Q1, my call).** The server still speaks first. Its opening `x402/payment-required` is a **rate card**: a generic price, for example per MiB, with no memo. The client then sends its application request (`{ root }`, or `{ root, bytes, maxBytes }`) *without* paying. The server answers with a second `x402/payment-required`, the **invoice**, which carries the exact amount and `extra.memo = <root as CIDv0>`. The client pays the latest requirements it has received.
   - Spec change: *"A server MAY send a further `x402/payment-required` in response to an application frame. It supersedes earlier ones."*
   - Free price discovery and server-speaks-first both survive, at the cost of one extra round trip for priced-per-request protocols.
 - **Self-hosted facilitator in the swarm (builder check Q3, my call).** The swarm runs the `@x402/svm` exact facilitator with its own devnet fee-payer key (hot, devnet only), instead of x402.org. We submit the transaction ourselves, so the ticker starts at real submit time and subscribes before submission. Processed, confirmed and finalized are measured, not inferred. This also gives `local` mode for free (same code, local RPC). The facilitator moves from Should to **Must**.
 
 - **`paid()` gains manual settlement:** `paid(server, { ..., settle: 'before' | 'manual' }, handler)`. In `manual` mode the handler gets `ctx.settle()` and must call it before delivering anything paid. Pin uses `manual` (verify payment → receive CAR → verify blocks → settle → pin). Fetch uses `before`.
 - **Pin is priced `exact` on the declared size.** The client declares `bytes` and `maxBytes` in the request, and the server rejects with `resource_too_large` if the CAR exceeds the declaration. `upto` waits until a devnet facilitator supports it (x402.org and PayAI don't today).
-- **Memo:** the provider sets `extra.memo = "ipfs:<root CID>"`, within the 256-byte cap of exact-SVM.
+- **Memo:** the provider sets `extra.memo = <root as CIDv0>` (46 bytes). Not `ipfs:<CIDv1>`: devnet's Memo program costs ~355 CU per byte and x402 exact caps a payment at 20,000 CU, so a 64-byte memo runs out of compute (measured 2026-10-28, first devnet run).
 - **Dependencies:** switch `@chainsafe/libp2p-noise`/`-yamux` to `@libp2p/noise`/`@libp2p/yamux`, as Helia uses.
 
 ## Landing page (`/`)

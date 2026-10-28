@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useInView, useReducedMotion } from 'motion/react'
 import { CheckCircle, ProhibitInset } from '@phosphor-icons/react/ssr'
-import { KEYS, ROOTS } from '@/lib/fixtures'
+import { KEYS, MEMOS } from '@/lib/fixtures'
 import { cx, short } from '@/components/ui'
 
 /**
@@ -72,9 +72,9 @@ function PayeeCheck({ t }: { t: number | null }) {
   )
 }
 
-/* 2. CID in memo: the memo field types ipfs:<root> glyph by glyph, holds, deletes faster, retypes. */
+/* 2. CID in memo: the memo field types the root CID glyph by glyph, holds, deletes faster, retypes. */
 function MemoTyping({ t }: { t: number | null }) {
-  const memo = `ipfs:${ROOTS[0]}`
+  const memo = MEMOS[0]
   let k = memo.length
   if (t != null) {
     if (t < 400) k = 0
@@ -168,7 +168,7 @@ const CARDS = [
   },
   {
     title: 'The memo names the content',
-    body: 'Every invoice puts ipfs: and the root CID in the transfer memo, so the transaction on the explorer points at the bytes it paid for.',
+    body: 'Every invoice puts the root CID in the transfer memo, so the transaction on the explorer points at the bytes it paid for.',
     Visual: MemoTyping, period: 7400, fig: 'Fig 1.2 Transfer memo',
   },
   {

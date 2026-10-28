@@ -2,7 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { unixfs } from '@helia/unixfs'
 import { X402Error } from 'x402-libp2p'
-import { FETCH_PROTOCOL, PIN_PROTOCOL, fetchHandler, fetchPaid, getReceipt, pinHandler, pinPaid, verifyCar, type BlockCheck } from '../src/index.ts'
+import { CID } from 'multiformats/cid'
+import { FETCH_PROTOCOL, PIN_PROTOCOL, fetchHandler, fetchPaid, getReceipt, memoFor, pinHandler, pinPaid, verifyCar, type BlockCheck } from '../src/index.ts'
 import { addFile, carOf, heliaNode, mockClient, mockServer, pricingFor, tamper } from './helpers.ts'
 
 test('verifyCar accepts an untouched CAR and reports every block ok', async () => {
@@ -28,7 +29,7 @@ test('verifyCar rejects a CAR with one flipped byte at that block index', async 
   } finally { await h.stop() }
 })
 
-test('fetchPaid returns blocks whose bytes equal the source file, invoice memo is ipfs:<root>', async () => {
+test('fetchPaid returns blocks whose bytes equal the source file, invoice memo is the root as CIDv0', async () => {
   const [seller, agent] = await Promise.all([heliaNode(), heliaNode()])
   try {
     const { root, data } = await addFile(seller)
@@ -36,8 +37,8 @@ test('fetchPaid returns blocks whose bytes equal the source file, invoice memo i
     await seller.libp2p.handle(FETCH_PROTOCOL, fetchHandler(seller, server, pricingFor(seller), { maxBytes: 1_000_000 }))
     const { blocks, settlement, paymentRequired } = await fetchPaid(agent.libp2p, seller.libp2p.getMultiaddrs()[0], root, mockClient())
     assert.equal(settlement.transaction, 'mocktx1')
-    assert.equal(paymentRequired.accepts[0].extra?.memo, `ipfs:${root}`)
-    assert.deepEqual(memos, [`ipfs:${root}`])
+    assert.equal(paymentRequired.accepts[0].extra?.memo, root.toV0().toString())
+    assert.deepEqual(memos, [root.toV0().toString()])
     for (const b of blocks) await agent.blockstore.put(b.cid, b.bytes)
     const chunks: Uint8Array[] = []
     for await (const c of unixfs(agent).cat(root, { offline: true })) chunks.push(c)
@@ -183,4 +184,14 @@ test('a peer that pays and then goes silent cannot hold the provider lock', asyn
     await assert.rejects(pinPaid(agent.libp2p, addr, car, root, mockClient()), (e: X402Error) => e.code === 'insufficient_funds')
     assert.ok(Date.now() - started < 15_000, `second upload waited ${Date.now() - started} ms behind a silent peer`)
   } finally { await Promise.all([provider.stop(), agent.stop()]) }
+})
+
+// First devnet run (2026-10-28): devnet's Memo program costs ~355 CU per byte and x402 exact caps a payment at
+// 20,000 CU, so the 64-byte 'ipfs:<CIDv1>' memo ran out of compute; the 46-byte CIDv0 lands with ~1,500 CU spare.
+test('memoFor: dag-pb sha-256 roots become 46-byte CIDv0, other roots get no memo', () => {
+  const unixfsRoot = CID.parse('bafybeigs34rvgpu2tieobp2hgh53j4m673maw7ml6ousm5tevdj6lkjioe')
+  assert.equal(memoFor(unixfsRoot), 'QmcXofqbpDDSmWA9p2kjPzVk67eFrFKDtRyHX2GdLG7AqE')
+  assert.equal(new TextEncoder().encode(memoFor(unixfsRoot)).byteLength, 46)
+  assert.equal(memoFor(CID.parse('bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku')), undefined, 'dag-cbor has no CIDv0 form')
+  assert.equal(memoFor(CID.parse('bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku')), undefined, 'raw has no CIDv0 form')
 })

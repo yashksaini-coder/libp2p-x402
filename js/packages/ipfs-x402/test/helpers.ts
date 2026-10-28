@@ -36,7 +36,7 @@ const schemeServer: SchemeNetworkServer = {
   scheme: 'mock',
   defaultAssetTransferMethod: 'default',
   paymentFlows: { default: { supported: ['authorization'], default: 'authorization' } },
-  parsePrice: async () => ({ amount: '1000', asset: 'USDC' }),
+  parsePrice: async (price: any) => ({ amount: price.amount, asset: price.asset, extra: price.extra }), // exact amounts pass through, as in @x402/svm
   enhancePaymentRequirements: async (r: PaymentRequirements) => r
 }
 

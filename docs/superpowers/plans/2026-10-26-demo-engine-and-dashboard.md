@@ -29,7 +29,7 @@
 - **Keys:**
   - Keys live in `js/apps/swarm/.keys/*.json` (gitignored). Never print, log or emit a secret key; events carry public addresses only.
   - Provider and seller PeerIds are derived from their Solana Ed25519 keys (identity = wallet). The agent checks payTo == remote PeerId key before signing.
-- **Memo:** `extra.memo = "ipfs:<root CID>"` (≤ 256 bytes) on every invoice.
+- **Memo:** `extra.memo = <root as CIDv0>` (46 bytes; see the demo design, Memo) on every invoice.
 - **Settlement order:**
   - Fetch: verify → settle → deliver.
   - Pin: verify payment → receive CAR → verify every block → settle → pin. A tampered pin produces **no** settlement transaction.
@@ -102,13 +102,13 @@
   - `sendCar(lp, car)` / `receiveCar(lp, maxBytes): Promise<Uint8Array>`: chunks of ≤ 60 KiB, terminated by an empty frame.
   - `Pricing = { network: Network, asset: string, payTo: string, perMiB: bigint, minAmount: bigint, maxTimeoutSeconds: number, extra?: Record<string, unknown> }`.
   - `price(pricing, bytes): PaymentRequirements`. The amount is `max(minAmount, ceil(bytes × perMiB / 2^20))`. `extra.memo` is set by the caller.
-  - `fetchHandler(helia, server: x402ResourceServer, pricing, hooks?: { onBlock?, onPaid? }): StreamHandler`, with `settle: 'before'`. The invoice is built from `{ root }` with `extra.memo = 'ipfs:' + root`.
+  - `fetchHandler(helia, server: x402ResourceServer, pricing, hooks?: { onBlock?, onPaid? }): StreamHandler`, with `settle: 'before'`. The invoice is built from `{ root }` with `extra.memo = memoFor(root)` (CIDv0).
   - `fetchPaid(node, peer, root: CID, client: x402Client, onBlock?): Promise<{ blocks, bytes, settlement, paymentRequired }>`.
 - [ ] Step 1: Tests:
   - `verifyCar accepts an untouched CAR and reports every block ok`
   - `verifyCar rejects a CAR with one flipped byte at that block index`
   - `fetchPaid returns blocks whose bytes equal the source file`: two Helia nodes over TCP, mock scheme.
-  - `fetch invoice carries memo ipfs:<root>`
+  - `fetch invoice carries the root CIDv0 memo`
 - [ ] Step 2: Run `npm test -w ipfs-x402`. Expected: FAIL.
 - [ ] Step 3: Implement. Use the `@ipld/car` `CarReader.fromBytes` / `CarWriter`, and `multiformats/hashes/sha2`.
 - [ ] Step 4: Run `npm test -w ipfs-x402`. Expected: PASS.
@@ -179,7 +179,7 @@
 - [ ] Step 3: Implement. Mock mode emits `tx` from the mock facilitator with measured ms.
 - [ ] Step 4: Run `npm test -w swarm`. Expected: PASS. Then `node src/main.ts --mode mock` and `curl -N localhost:4402/events` print `hello`.
 - [ ] Step 5: Commit `feat(swarm): demo engine with scenes and event stream`.
-- [ ] Step 6 (needs funded keys, user approves before the first devnet tx): run scene 1 in devnet mode and confirm the signature on the explorer shows the `ipfs:<root>` memo. Record it to `recordings/scene1.jsonl`.
+- [ ] Step 6 (needs funded keys, user approves before the first devnet tx): run scene 1 in devnet mode and confirm the signature on the explorer shows the root CID memo. Record it to `recordings/scene1.jsonl`.
 
 ### Task 5: web: app shell and landing page
 

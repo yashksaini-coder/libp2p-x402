@@ -20,7 +20,7 @@ test('scene 1 emits quote, payee-check ok, payment, tx finalized, blocks all ok,
     assert.deepEqual([...order].sort((a, b) => a - b), order, `out of order: ${order}`)
     const quotes = ev.filter(e => e.kind === 'quote')
     assert.deepEqual(quotes.map(q => q.kind === 'quote' && q.invoice), [false, true])
-    assert.match(String(quotes[1].kind === 'quote' && quotes[1].memo), /^ipfs:baf/)
+    assert.match(String(quotes[1].kind === 'quote' && quotes[1].memo), /^Qm[1-9A-HJ-NP-Za-km-z]{44}$/) // root as CIDv0 (memoFor)
     assert.ok(ev.some(e => e.kind === 'payee-check' && e.ok && e.payTo === e.remoteKey))
     const payment = ev.find(e => e.kind === 'payment')!
     const tx = ev.filter(e => e.kind === 'tx')

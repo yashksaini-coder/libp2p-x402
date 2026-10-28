@@ -9,7 +9,7 @@ export const COMPARE: Array<[string, string, string]> = [
 export const STEPS = [
   {
     title: 'Quote',
-    body: 'The provider speaks first with a rate card. The agent names a root CID and gets an invoice with the exact amount and the memo ipfs: plus that CID.',
+    body: 'The provider speaks first with a rate card. The agent names a root CID and gets an invoice with the exact amount and that CID as the memo.',
   },
   {
     title: 'Pay',

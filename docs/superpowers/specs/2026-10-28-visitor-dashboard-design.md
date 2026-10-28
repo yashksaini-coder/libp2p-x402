@@ -111,7 +111,7 @@ Each is a card with a state (waiting, active, done, error), one plain sentence, 
 1. **Connect a wallet.** Lists detected wallets. On a phone with no injected wallet: buttons "Open in Phantom", "Open in Solflare", "Open in Backpack" (deeplinks to the wallet's in app browser), and on Android Chrome the Mobile Wallet Adapter option. If the wallet is not on devnet: a short how to (Phantom: Settings, Developer settings, Testnet mode).
 2. **Get test USDC.** One button. Shows the drip transaction's stages and the new balance. Done automatically if the wallet already holds at least one purchase worth.
 3. **Buy the dataset.** Shows the seller (name, PeerId shortened, its payee address) and the price after the invoice arrives. The primary button reads "Pay 0.002124 USDC" with the real amount. While the wallet prompt is open: "Approve in your wallet" with the countdown.
-4. **Verified and yours.** Receipt: amount, payer (you), payee (the seller's key), memo `ipfs:<root>`, transaction with Explorer link (devnet only), blocks verified N of N, total time. "Preview the data" shows the first rows of the dataset they bought; "Download" saves it. "Buy again" starts a fresh purchase.
+4. **Verified and yours.** Receipt: amount, payer (you), payee (the seller's key), memo (the root CID), transaction with Explorer link (devnet only), blocks verified N of N, total time. "Preview the data" shows the first rows of the dataset they bought; "Download" saves it. "Buy again" starts a fresh purchase.
 
 ### The process visual (the main act)
 
