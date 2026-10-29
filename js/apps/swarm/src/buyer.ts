@@ -32,6 +32,8 @@ export async function startBuyer (): Promise<Buyer> {
       connectionEncrypters: [noise()],
       streamMuxers: [yamux()],
       peerDiscovery: [],
+      // Browsers deny private addresses by default; the only address this node dials is the configured seller (loopback in local runs).
+      connectionGater: { denyDialMultiaddr: () => false },
       services: { identify: identify() }
     } as any
   })

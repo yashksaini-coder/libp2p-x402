@@ -31,6 +31,9 @@
       ],
       "@swarm/tab": [
         "../swarm/src/tab.ts"
+      ],
+      "@swarm/buyer": [
+        "../swarm/src/buyer.ts"
       ]
     },
     "allowImportingTsExtensions": true
