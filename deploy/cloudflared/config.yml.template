@@ -1,0 +1,17 @@
+# Render with: envsubst < config.yml.template > ~/.cloudflared/config.yml
+# Needs TRY_HOST, SELLER_HOST, TUNNEL_ID (from `cloudflared tunnel create booth`).
+tunnel: ${TUNNEL_ID}
+credentials-file: ${HOME}/.cloudflared/${TUNNEL_ID}.json
+
+ingress:
+  # Swarm: SSE feed and visitor drip. Token endpoints answer 403 to tunneled requests.
+  - hostname: ${TRY_HOST}
+    path: ^/(events|visitor)
+    service: http://localhost:4402
+  # Public web build (npm run start:public)
+  - hostname: ${TRY_HOST}
+    service: http://localhost:3000
+  # Browser seller: libp2p websocket
+  - hostname: ${SELLER_HOST}
+    service: http://localhost:4404
+  - service: http_status:404
