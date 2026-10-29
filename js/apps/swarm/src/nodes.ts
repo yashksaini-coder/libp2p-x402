@@ -19,13 +19,19 @@ export { addContent, dataset } from './shared.ts'
 /**
  * A Helia node on loopback TCP whose PeerId is `privateKey` (= its Solana wallet). No discovery.
  * `dialsTabs`: can also reach a browser tab: WebSockets to the relay, /p2p-circuit, then a WebRTC upgrade.
+ * `wsPort`: also listens on loopback WebSockets (visitors arrive through a tunnel), advertising `announce` too.
+ * Every tunnelled visitor comes from loopback, so loopback is exempt from connection limits.
  */
-export async function heliaNode (privateKey: PrivateKey, opts: { dialsTabs?: boolean } = {}): Promise<Node> {
+export async function heliaNode (privateKey: PrivateKey, opts: { dialsTabs?: boolean, wsPort?: number, announce?: string[] } = {}): Promise<Node> {
+  const ws = opts.wsPort != null
+  const transports = opts.dialsTabs === true ? [tcp(), webSockets(), circuitRelayTransport(), webRTC()] : ws ? [tcp(), webSockets()] : [tcp()]
   const helia = createHelia({
     libp2p: {
       privateKey,
-      addresses: { listen: ['/ip4/127.0.0.1/tcp/0'] },
-      transports: opts.dialsTabs === true ? [tcp(), webSockets(), circuitRelayTransport(), webRTC()] : [tcp()],
+      // appendAnnounce, not announce: announce would replace the loopback addresses the agent dials in scene 1.
+      addresses: { listen: ['/ip4/127.0.0.1/tcp/0', ...(ws ? [`/ip4/127.0.0.1/tcp/${opts.wsPort}/ws`] : [])], appendAnnounce: opts.announce ?? [] },
+      ...(ws ? { connectionManager: { allow: ['/ip4/127.0.0.1/ipcidr/32'] } } : {}),
+      transports,
       connectionEncrypters: [noise()],
       streamMuxers: [yamux()],
       peerDiscovery: [],

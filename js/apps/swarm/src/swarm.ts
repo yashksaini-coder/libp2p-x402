@@ -1,4 +1,4 @@
-import { FETCH_PROTOCOL, PIN_PROTOCOL, fetchHandler, fetchPaid, pinHandler, pinPaid } from 'ipfs-x402'
+import { FETCH_PROTOCOL, PIN_PROTOCOL, fetchHandler, fetchPaid, pinHandler, pinPaid, type FetchHooks } from 'ipfs-x402'
 import { X402Error, payeeFromPeerId, type PayHooks } from 'x402-libp2p'
 import type { PeerId } from '@libp2p/interface'
 import type { FacilitatorClient } from '@x402/core/server'
@@ -11,8 +11,8 @@ import { ephemeralKeys, loadKeys } from './keys.ts'
 import { startKubo, type Kubo } from './kubo.ts'
 import { addContent, carBytes, checkpoint, dataset, heliaNode, tamper, type Node } from './nodes.ts'
 import { startRelay } from './relay.ts'
-import type { SellConfig } from './shared.ts'
-import { devnetPayments, mockPayments, type Payments } from './payments.ts'
+import type { SellConfig, VisitorConfig } from './shared.ts'
+import { devnetPayments, mockPayments, tagPayment, type Payments } from './payments.ts'
 import { watchDevnet, watchMock } from './txwatch.ts'
 
 export interface SwarmOptions {
@@ -22,6 +22,10 @@ export interface SwarmOptions {
   recordTo?: string
   /** Loopback WebSockets port of the circuit relay browser sellers reserve on. 0 = any. */
   relayPort?: number
+  /** Loopback WebSockets port visitors reach the seller on (through the tunnel). 0 = any. */
+  sellerWsPort?: number
+  /** The seller's public multiaddr behind the tunnel, without /p2p. */
+  sellerPublicAddr?: string
 }
 
 export interface Swarm {
@@ -32,6 +36,8 @@ export interface Swarm {
   busy: () => boolean
   /** For browser sellers: GET /sell/config, and /facilitator/* to verify and settle. */
   sellConfig: () => SellConfig
+  /** GET /visitor/config: how a visitor's browser reaches and pays the seller. */
+  visitorConfig: () => VisitorConfig
   /** POST /sell/register: a tab proves the control token before the relay treats it as a seller. */
   allowTab: (peerId: string) => Promise<void>
   facilitator: FacilitatorClient
@@ -51,8 +57,8 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
   // Every settlement transaction is attributed to the payment in flight when it was submitted.
   let currentPayment = ''
   const watch = opts.mode === 'devnet' ? watchDevnet : watchMock
-  const onSubmit = (signature: string, submittedAt: number): void => {
-    const paymentId = currentPayment
+  const onSubmit = (signature: string, submittedAt: number, tagged?: string): void => {
+    const paymentId = tagged ?? currentPayment
     bus.emit({ kind: 'tx', paymentId, signature, status: 'submitted', ms: 0 })
     watch(signature, submittedAt, (status, ms) => bus.emit({ kind: 'tx', paymentId, signature, status, ms }))
       .catch(err => bus.emit({ kind: 'error', code: 'tx_watch_failed', message: String(err?.message ?? err), settled: false }))
@@ -62,7 +68,7 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
   const hello = { kind: 'hello', mode: payments.mode, network: payments.network, explorer: 'https://explorer.solana.com/tx/{sig}?cluster=devnet' } as const
   bus.emit(hello)
 
-  const [agent, seller, provider] = await Promise.all([heliaNode(keys.agent.libp2p, { dialsTabs: true }), heliaNode(keys.seller.libp2p), heliaNode(keys.provider.libp2p)])
+  const [agent, seller, provider] = await Promise.all([heliaNode(keys.agent.libp2p, { dialsTabs: true }), heliaNode(keys.seller.libp2p, { wsPort: opts.sellerWsPort ?? 0, announce: opts.sellerPublicAddr != null ? [opts.sellerPublicAddr] : undefined }), heliaNode(keys.provider.libp2p)])
   const kubo: Kubo | undefined = opts.kubo === true ? await startKubo() : undefined
   const id = (n: { libp2p: { peerId: PeerId } }): string => n.libp2p.peerId.toString()
 
@@ -81,10 +87,41 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
   })
   bus.emit({ kind: 'peer', id: id(relay), role: 'relay', label: 'Relay', addrs: [relay.addr] })
 
+  // Visitors buy from the seller too (over WebSockets): the seller's own hooks report them, each payment under its own id.
+  // ponytail: never pruned (identical mock payloads may verify concurrently); one short entry per purchase.
+  const payers = new Map<string, string>()
+  const visitorSellerServer = async (): Promise<Awaited<ReturnType<Payments['server']>>> => {
+    const server = await payments.server()
+    // The gate's hook gets the payload, not the facilitator's answer: keep the payer it verified.
+    return server.onAfterVerify(async ({ paymentPayload, result }) => { if (result.payer != null) payers.set(JSON.stringify(paymentPayload.payload), result.payer) })
+  }
+  const visitors = new Set<string>()
+  let visitSeq = 0
+  const fromVisitor = (peer: PeerId): boolean => !peer.equals(agent.libp2p.peerId)
+  const visitorHooks: FetchHooks = {
+    onInvoice: ({ accepts, peer }) => {
+      if (!fromVisitor(peer)) return
+      const r = accepts[0]
+      bus.emit({ kind: 'quote', from: id(seller), to: peer.toString(), protocol: FETCH_PROTOCOL, amount: r.amount, asset: r.asset, memo: r.extra?.memo as string | undefined, invoice: true })
+    },
+    onVerified: ({ payment, requirements: r, peer }) => {
+      if (!fromVisitor(peer)) return
+      const payer = payers.get(JSON.stringify(payment.payload)) ?? ''
+      const from = peer.toString()
+      if (!visitors.has(from)) {
+        visitors.add(from)
+        bus.emit({ kind: 'peer', id: from, role: 'visitor', label: `Visitor ${payer.slice(0, 4)}…${payer.slice(-4)}`, addrs: [], payee: payer })
+      }
+      const paymentId = `visit-${++visitSeq}`
+      tagPayment(payment, paymentId)
+      bus.emit({ kind: 'payment', id: paymentId, from, to: id(seller), protocol: FETCH_PROTOCOL, amount: r.amount, asset: r.asset, network: r.network, memo: r.extra?.memo as string | undefined })
+    }
+  }
+
   // Seller sells a dataset over paid fetch; provider sells pinning.
   const datasetRoot = await addContent(seller, dataset())
   const checkpointRoot = await addContent(agent, checkpoint())
-  await seller.libp2p.handle(FETCH_PROTOCOL, fetchHandler(seller, await payments.server(), payments.pricing(payeeFromPeerId(seller.libp2p.peerId)!), { maxBytes: MAX_BYTES }))
+  await seller.libp2p.handle(FETCH_PROTOCOL, fetchHandler(seller, await visitorSellerServer(), payments.pricing(payeeFromPeerId(seller.libp2p.peerId)!), { maxBytes: MAX_BYTES, paymentTimeoutMs: 120_000 }, visitorHooks))
   await provider.libp2p.handle(PIN_PROTOCOL, pinHandler(provider, await payments.server(), payments.pricing(payeeFromPeerId(provider.libp2p.peerId)!), { maxBytes: MAX_BYTES, durationDays: 30 }, {
     onBlock: b => bus.emit({ kind: 'block', requestId: currentPayment, cid: b.cid.toString(), index: b.index, total: b.total, ok: b.ok }),
     onPinned: p => bus.emit({ kind: 'pinned', root: p.root.toString(), provider: id(provider), receiptCid: p.receipt.toString(), expiresAt: p.receiptBody.expiresAt, receipt: p.receiptBody })
@@ -101,6 +138,7 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
     },
     onPayment: (p) => {
       currentPayment = `pay-${++paymentSeq}`
+      tagPayment(p, currentPayment)
       const r = p.accepted
       bus.emit({ kind: 'payment', id: currentPayment, from: id(agent), to: toId, protocol, amount: r.amount, asset: r.asset, network: r.network, memo: r.extra?.memo as string | undefined })
     }
@@ -175,6 +213,19 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
       }
     },
     sellConfig: () => ({ mode: payments.mode as 'mock' | 'devnet', scheme: payments.scheme, network: payments.network, asset: payments.asset, rpcUrl: payments.rpcUrl, relay: relay.addr, root: datasetRoot.toString() }),
+    visitorConfig: () => {
+      const peerId = id(seller)
+      const loopback = seller.libp2p.getMultiaddrs().map(String).find(a => a.includes('/ws/'))!
+      return {
+        mode: payments.mode as 'mock' | 'devnet',
+        network: payments.network,
+        asset: payments.asset,
+        rpcUrl: payments.rpcUrl,
+        root: datasetRoot.toString(),
+        seller: { peerId, payee: payeeFromPeerId(seller.libp2p.peerId)!, addrs: [opts.sellerPublicAddr != null ? `${opts.sellerPublicAddr}/p2p/${peerId}` : loopback] },
+        drip: { amount: '10000', enabled: true }
+      }
+    },
     allowTab: async (peerId) => { await relay.allow(peerIdFromString(peerId)) },
     facilitator: payments.facilitator,
     stop: async () => {

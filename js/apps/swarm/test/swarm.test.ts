@@ -146,3 +146,52 @@ test('a peer that serves fetch on the relay without registering is not treated a
     await tab.stop()
   } finally { server.close(); await swarm.stop() }
 })
+
+test('visitor config advertises the seller over ws', async () => {
+  const { payeeFromPeerId } = await import('x402-libp2p')
+  const { peerIdFromString } = await import('@libp2p/peer-id')
+  const swarm = await startSwarm({ mode: 'mock' })
+  const { server, port } = await serve({ ...swarm, token: 't0ken' }, 0)
+  try {
+    const config = await (await fetch(`http://127.0.0.1:${port}/visitor/config`)).json()
+    assert.match(config.seller.addrs[0], /\/ws\/p2p\/12D3KooW/)
+    assert.equal(config.seller.payee, payeeFromPeerId(peerIdFromString(config.seller.peerId)))
+    const seller = swarm.bus.events().find(e => e.kind === 'peer' && e.role === 'seller')
+    assert.equal(config.seller.peerId, seller?.kind === 'peer' && seller.id)
+    assert.equal(config.root, swarm.sellConfig().root) // the dataset root
+    assert.equal(config.drip.amount, '10000')
+  } finally { server.close(); await swarm.stop() }
+})
+
+test('concurrent visitor payments are attributed separately', async () => {
+  const { createLibp2p } = await import('libp2p')
+  const { webSockets } = await import('@libp2p/websockets')
+  const { noise } = await import('@libp2p/noise')
+  const { yamux } = await import('@libp2p/yamux')
+  const { identify } = await import('@libp2p/identify')
+  const { multiaddr } = await import('@multiformats/multiaddr')
+  const { CID } = await import('multiformats/cid')
+  const { x402Client } = await import('@x402/core/client')
+  const { fetchPaid } = await import('ipfs-x402')
+  const swarm = await startSwarm({ mode: 'mock' })
+  const config = swarm.visitorConfig()
+  // ponytail: inline buyer until Task 3's startBuyer exists.
+  const buyer = async (): Promise<any> => await createLibp2p({ transports: [webSockets()], connectionEncrypters: [noise()], streamMuxers: [yamux()], services: { identify: identify() } })
+  const mockClient = new x402Client().register(config.network, { scheme: 'mock', createPaymentPayload: async () => ({ x402Version: 2, payload: { sig: 'mock' } }) }).setSpendControls(false)
+  const buyers = await Promise.all([buyer(), buyer()])
+  try {
+    await Promise.all(buyers.map(async b => await fetchPaid(b, multiaddr(config.seller.addrs[0]), CID.parse(config.root), mockClient)))
+    await settle(200)
+    const ev = swarm.bus.events()
+    const payments = ev.filter(e => e.kind === 'payment' && e.id.startsWith('visit-'))
+    assert.equal(payments.length, 2)
+    assert.notEqual(payments[0].kind === 'payment' && payments[0].id, payments[1].kind === 'payment' && payments[1].id)
+    for (const p of payments) {
+      assert.ok(p.kind === 'payment')
+      assert.equal(ev.filter(e => e.kind === 'tx' && e.status === 'submitted' && e.paymentId === p.id).length, 1, `no submitted tx for ${p.id}`)
+    }
+    const visitors = ev.filter(e => e.kind === 'peer' && e.role === 'visitor')
+    assert.deepEqual(visitors.map(v => v.kind === 'peer' && v.id).sort(), buyers.map(b => b.peerId.toString()).sort())
+    assert.ok(ev.some(e => e.kind === 'quote' && e.invoice && e.to === buyers[0].peerId.toString()))
+  } finally { await Promise.all(buyers.map(async b => await b.stop())); await swarm.stop() }
+})

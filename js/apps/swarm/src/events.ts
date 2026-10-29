@@ -1,7 +1,7 @@
 // The contract between the swarm (engine) and the dashboard.
 // Every event carries `seq` (monotonic) and `at` (ms since epoch). Public data only: never secrets.
 
-export type Role = 'agent' | 'provider' | 'seller' | 'kubo' | 'relay'
+export type Role = 'agent' | 'provider' | 'seller' | 'kubo' | 'relay' | 'visitor'
 export type Mode = 'mock' | 'devnet' | 'local' | 'replay'
 export type TxStatus = 'submitted' | 'processed' | 'confirmed' | 'finalized'
 

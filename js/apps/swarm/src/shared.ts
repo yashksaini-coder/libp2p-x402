@@ -36,3 +36,14 @@ export const mockSchemeServer: SchemeNetworkServer = {
 
 /** GET /sell/config: what a browser seller needs to price, settle through the swarm, and reach the relay. */
 export interface SellConfig { mode: 'mock' | 'devnet', scheme: string, network: Network, asset: string, rpcUrl?: string, relay: string, root: string }
+
+/** GET /visitor/config: what a visitor's browser needs to buy from the seller over WebSockets. */
+export interface VisitorConfig {
+  mode: 'mock' | 'devnet'
+  network: Network
+  asset: string
+  rpcUrl?: string
+  root: string
+  seller: { peerId: string, payee: string, addrs: string[] }
+  drip: { amount: string, enabled: boolean }
+}

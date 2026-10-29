@@ -3,7 +3,7 @@ import type { FacilitatorClient } from '@x402/core/server'
 import { timingSafeEqual } from 'node:crypto'
 import type { Bus } from './bus.ts'
 import type { SwarmEventBody } from './events.ts'
-import type { SellConfig } from './shared.ts'
+import type { SellConfig, VisitorConfig } from './shared.ts'
 
 export interface Control {
   bus: Bus
@@ -12,6 +12,7 @@ export interface Control {
   busy: () => boolean
   runScene?: (n: 1 | 2 | 3) => Promise<void>
   sellConfig?: () => SellConfig
+  visitorConfig?: () => VisitorConfig
   allowTab?: (peerId: string) => Promise<void>
   facilitator?: FacilitatorClient
 }
@@ -37,7 +38,7 @@ function tokenOk (header: string | undefined, token: string): boolean {
 
 /**
  * GET /events (SSE), POST /scenes/:n (token), GET /health. Bind to loopback only.
- * For browser sellers: GET /sell/config, POST /sell/register { peerId } (token), and the standard x402 facilitator API under
+ * For visitors: GET /visitor/config (public). For browser sellers: GET /sell/config, POST /sell/register { peerId } (token), and the standard x402 facilitator API under
  * /facilitator (verify, settle, supported; token) backed by the in-process facilitator.
  */
 export async function serve (c: Control, port: number, host = '127.0.0.1'): Promise<{ server: Server, port: number }> {
@@ -72,6 +73,11 @@ export async function serve (c: Control, port: number, host = '127.0.0.1'): Prom
 
     if (req.method === 'GET' && url.pathname === '/sell/config' && c.sellConfig != null) {
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(c.sellConfig()))
+      return
+    }
+
+    if (req.method === 'GET' && url.pathname === '/visitor/config' && c.visitorConfig != null) {
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(c.visitorConfig()))
       return
     }
 
