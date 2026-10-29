@@ -8,11 +8,13 @@ import { accountUsable } from '@/lib/try/wallet'
 import { walletBrowseLinks } from '@/lib/try/deeplinks'
 import { PURCHASE_USDC, type FlowState, type Step } from '@/lib/try/flow'
 import { useVisitor, type VisitorConfig } from '@/lib/try/useVisitor'
-import { Eyebrow, Mono, cx, short } from '@/components/ui'
+import { Eyebrow, Mono, Panel, cx, short } from '@/components/ui'
 import { SignerBridge, WalletProvider } from './WalletProvider'
 import { StepCard, type CardState } from './StepCard'
 import { TopBar } from './TopBar'
 import { Receipt } from './Receipt'
+import { Sequence } from './Sequence'
+import { BlockStrip } from './BlockStrip'
 
 const ORDER: Step[] = ['connect', 'fund', 'buy', 'done']
 const btn = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-base font-semibold transition-all duration-300 ease-out active:scale-[0.98] disabled:opacity-50'
@@ -43,9 +45,11 @@ function Visitor() {
   const p = state.purchase
 
   return (
-    <main id="main" className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-4 sm:py-8">
+    <main id="main" className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-4 sm:py-8 lg:max-w-6xl">
       {account && usable?.ok && config?.mode === 'devnet' && <SignerBridge account={account} onSigner={v.setSigner} />}
       <TopBar state={state} offline={v.offline} address={address} onDisconnect={v.disconnect} />
+      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,32rem)_minmax(0,1fr)] lg:items-start lg:gap-10">
+      <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-2 pt-4">
         <Eyebrow>{state.mode === 'mock' ? 'Try it · MOCK payments' : 'Try it · Solana devnet'}</Eyebrow>
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Buy a dataset with your own wallet</h1>
@@ -113,7 +117,7 @@ function Visitor() {
           </p>
         )}
         {p?.tx && <Stages stages={p.tx.stages} mock={state.mode === 'mock'} />}
-        {p && p.blocks.length > 0 && <Blocks state={state} />}
+        {p && p.blocks.length > 0 && <div className="lg:hidden"><BlockStrip blocks={p.blocks} total={p.total} /></div>}
         {state.step === 'buy' && state.error && <button type="button" className={primary} onClick={v.retry}>Buy again</button>}
       </StepCard>
 
@@ -128,6 +132,13 @@ function Visitor() {
           <Receipt state={state} payer={address} tx={v.settledTx} ms={v.timing?.end != null ? v.timing.end - v.timing.start : undefined} onAgain={v.retry} />
         )}
       </StepCard>
+      </div>
+      <Panel className={cx('flex-col gap-4 p-4 sm:p-6 lg:sticky lg:top-8', p ? 'flex' : 'hidden lg:flex')} aria-label="The exchange, event by event">
+        <Eyebrow>The exchange{state.mode === 'mock' && ' · MOCK payments'}</Eyebrow>
+        {p ? <Sequence purchase={p} mode={state.mode === 'devnet' ? 'devnet' : 'mock'} />
+          : <p className="text-base text-muted">Every message between your browser, the seller, the facilitator and Solana devnet appears here as it happens, once your browser dials the seller.</p>}
+      </Panel>
+      </div>
     </main>
   )
 }
@@ -217,22 +228,6 @@ function Stages({ stages, mock }: { stages: Array<{ status: string, ms: number }
   )
 }
 
-function Blocks({ state }: { state: FlowState }) {
-  const p = state.purchase!
-  const total = p.total ?? p.blocks.length
-  const ok = p.blocks.filter((b) => b.ok).length
-  return (
-    <div className="flex flex-col gap-2">
-      <ol className="flex flex-wrap gap-1" aria-label={`${ok} of ${total} blocks verified`}>
-        {Array.from({ length: total }, (_, i) => {
-          const b = p.blocks.find((x) => x.index === i)
-          return <li key={i} className={cx('size-4 rounded-sm transition-colors duration-500 ease-out', b?.ok === true && 'bg-settled', b?.ok === false && 'shake bg-rejected', !b && 'border border-line bg-hover')} />
-        })}
-      </ol>
-      <Mono className="text-sm text-muted"><span className="text-white">{ok}</span> of {total} blocks verified</Mono>
-    </div>
-  )
-}
 
 function ExplorerLink({ sig }: { sig: string }) {
   return (
