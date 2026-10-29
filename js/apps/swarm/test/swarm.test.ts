@@ -1,8 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createRequire } from 'node:module'
 import type { SwarmEvent } from '../src/events.ts'
 import { serve } from '../src/http.ts'
 import { startSwarm } from '../src/swarm.ts'
@@ -200,4 +201,34 @@ test('concurrent visitor payments are attributed separately', async () => {
     assert.deepEqual(visitors.map(v => v.kind === 'peer' && v.id).sort(), buyers.map(b => b.libp2p.peerId.toString()).sort())
     assert.ok(ev.some(e => e.kind === 'quote' && e.invoice && e.to === buyers[0].libp2p.peerId.toString()))
   } finally { await Promise.all(buyers.map(async b => await b.stop())); await swarm.stop() }
+})
+
+test('token endpoints refuse tunnel traffic even with the token', async () => {
+  const swarm = await startSwarm({ mode: 'mock' })
+  const { server, port } = await serve({ ...swarm, token: 't0ken' }, 0)
+  try {
+    const post = async (path: string, tunnel: boolean): Promise<number> =>
+      (await fetch(`http://127.0.0.1:${port}${path}`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer t0ken', 'Content-Type': 'application/json', ...(tunnel ? { 'CF-Connecting-IP': '203.0.113.9' } : {}) },
+        body: JSON.stringify({ paused: true })
+      })).status
+    for (const path of ['/scenes/1', '/sell/register', '/facilitator/verify', '/visitor/pause']) {
+      assert.equal(await post(path, true), 403, path)
+    }
+    assert.equal(await post('/scenes/1', false), 202)
+    while (swarm.busy()) await settle(50)
+  } finally { server.close(); await swarm.stop() }
+})
+
+test('x402 svm resolves @solana/keys below 8.5.0', () => {
+  const svm = createRequire(import.meta.url).resolve('@x402/svm')
+  // @x402/svm imports verifySignature from @solana/kit, so follow that chain: svm -> kit -> keys.
+  // (Resolving keys straight from svm would hit the hoisted 8.5.0 that only swarm's own kit uses.)
+  // The package's exports map hides package.json, so find the package root from the resolved entry.
+  const entry = createRequire(createRequire(svm).resolve('@solana/kit')).resolve('@solana/keys')
+  const { version } = JSON.parse(readFileSync(join(entry.slice(0, entry.lastIndexOf('@solana/keys') + '@solana/keys'.length), 'package.json'), 'utf8'))
+  const [major, minor] = version.split('.').map(Number)
+  assert.ok(major < 8 || (major === 8 && minor < 5),
+    `@x402/svm resolves @solana/keys ${version} via @solana/kit; 8.5.0+ breaks exact payments (see the upstream issue draft in ~/oss_contribution_logs/drafts). Run npm ls @solana/keys from js/.`)
 })

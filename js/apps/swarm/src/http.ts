@@ -34,6 +34,11 @@ async function json (req: IncomingMessage): Promise<any> {
   return JSON.parse(body)
 }
 
+/** Cloudflare adds this header to every tunneled request; token endpoints are for the presenter on loopback only. */
+function fromTunnel (req: IncomingMessage): boolean {
+  return req.headers['cf-connecting-ip'] != null
+}
+
 function tokenOk (header: string | undefined, token: string): boolean {
   const given = Buffer.from(header?.replace(/^Bearer /, '') ?? '')
   const want = Buffer.from(token)
@@ -48,7 +53,7 @@ function tokenOk (header: string | undefined, token: string): boolean {
 export async function serve (c: Control, port: number, host = '127.0.0.1'): Promise<{ server: Server, port: number }> {
   const server = createServer((req, res) => {
     const origin = req.headers.origin
-    if (origin != null && LOCAL_ORIGIN.test(origin)) {
+    if (origin != null && (LOCAL_ORIGIN.test(origin) || origin === process.env.TRY_ORIGIN)) {
       res.setHeader('Access-Control-Allow-Origin', origin)
       res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type')
       res.setHeader('Vary', 'Origin')
@@ -67,6 +72,7 @@ export async function serve (c: Control, port: number, host = '127.0.0.1'): Prom
 
     const scene = url.pathname.match(/^\/scenes\/([123])$/)
     if (req.method === 'POST' && scene != null) {
+      if (fromTunnel(req)) { res.writeHead(403).end('tunnel'); return }
       if (!tokenOk(req.headers.authorization, c.token)) { res.writeHead(401).end('bad token'); return }
       if (c.runScene == null) { res.writeHead(409).end('replay mode has no scenes'); return }
       if (c.busy()) { res.writeHead(409).end('a scene is running'); return }
@@ -102,6 +108,7 @@ export async function serve (c: Control, port: number, host = '127.0.0.1'): Prom
     }
 
     if (req.method === 'POST' && url.pathname === '/visitor/pause' && c.drip != null) {
+      if (fromTunnel(req)) { res.writeHead(403).end('tunnel'); return }
       if (!tokenOk(req.headers.authorization, c.token)) { res.writeHead(401).end('bad token'); return }
       const drip = c.drip
       json(req).then(({ paused }) => {
@@ -113,6 +120,7 @@ export async function serve (c: Control, port: number, host = '127.0.0.1'): Prom
     }
 
     if (req.method === 'POST' && url.pathname === '/sell/register' && c.allowTab != null) {
+      if (fromTunnel(req)) { res.writeHead(403).end('tunnel'); return }
       if (!tokenOk(req.headers.authorization, c.token)) { res.writeHead(401).end('bad token'); return }
       const allowTab = c.allowTab
       json(req).then(async ({ peerId }) => { await allowTab(String(peerId)) }).then(
@@ -125,6 +133,7 @@ export async function serve (c: Control, port: number, host = '127.0.0.1'): Prom
     const fac = url.pathname.match(/^\/facilitator\/(verify|settle|supported)$/)
     if (fac != null && c.facilitator != null) {
       // Settling spends the fee payer's SOL: same token as the scene controls.
+      if (fromTunnel(req)) { res.writeHead(403).end('tunnel'); return }
       if (!tokenOk(req.headers.authorization, c.token)) { res.writeHead(401).end('bad token'); return }
       const f = c.facilitator
       const op = fac[1]
