@@ -37,7 +37,7 @@ export function SceneControls({ running, tabLive }: { running?: number, tabLive?
   }, [])
 
   useEffect(() => {
-    if (!local) return
+    if (!local || !SWARM_TOKEN) return
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || (e.target as HTMLElement)?.closest('input,textarea,[contenteditable]')) return
       if (e.key === '1' || e.key === '2' || e.key === '3') start(Number(e.key))
@@ -46,7 +46,7 @@ export function SceneControls({ running, tabLive }: { running?: number, tabLive?
     return () => window.removeEventListener('keydown', onKey)
   }, [local, start])
 
-  if (!local) return null
+  if (!local || !SWARM_TOKEN) return null
   return (
     <div className="flex items-center gap-3">
       {msg && <p role="status" className="max-w-xs text-sm text-rejected">{msg}</p>}
