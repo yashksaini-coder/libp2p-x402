@@ -15,6 +15,8 @@ import type { KeyRole, RoleKey } from './keys.ts'
 
 export const DEVNET: Network = 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1'
 export const DEVNET_RPC = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com'
+/** What browsers get: SOLANA_RPC_URL may carry a provider API key, so it never leaves the server. */
+export const PUBLIC_RPC = process.env.PUBLIC_SOLANA_RPC_URL ?? 'https://api.devnet.solana.com'
 export const DEVNET_WS = process.env.SOLANA_WS_URL ?? 'wss://api.devnet.solana.com'
 
 /** Called with each transaction signature at the moment the facilitator submits it, with the payment it settles when tagged. */

@@ -1,5 +1,5 @@
-import { createHelia } from 'helia'
-import type { HeliaWithLibp2p } from '@helia/libp2p'
+import { createHelia, createHeliaLight } from 'helia'
+import { withLibp2p, type HeliaWithLibp2p } from '@helia/libp2p'
 import { car } from '@helia/car'
 import { tcp } from '@libp2p/tcp'
 import { noise } from '@libp2p/noise'
@@ -29,19 +29,19 @@ export { addContent, dataset } from './shared.ts'
 export async function heliaNode (privateKey: PrivateKey, opts: { dialsTabs?: boolean, wsPort?: number, announce?: string[] } = {}): Promise<Node> {
   const ws = opts.wsPort != null
   const transports = opts.dialsTabs === true ? [tcp(), webSockets(), circuitRelayTransport(), webRTC()] : ws ? [tcp(), webSockets()] : [tcp()]
-  const helia = createHelia({
-    libp2p: {
-      privateKey,
-      // appendAnnounce, not announce: announce would replace the loopback addresses the agent dials in scene 1.
-      addresses: { listen: ['/ip4/127.0.0.1/tcp/0', ...(ws ? [`/ip4/127.0.0.1/tcp/${opts.wsPort}/ws`] : [])], appendAnnounce: opts.announce ?? [] },
-      ...(ws ? { connectionManager: WS_LIMITS } : {}),
-      transports,
-      connectionEncrypters: [noise()],
-      streamMuxers: [yamux()],
-      peerDiscovery: [],
-      services: { identify: identify(), routing: localOnlyRouting() }
-    } as any
-  })
+  const libp2p = {
+    privateKey,
+    // appendAnnounce, not announce: announce would replace the loopback addresses the agent dials in scene 1.
+    addresses: { listen: ['/ip4/127.0.0.1/tcp/0', ...(ws ? [`/ip4/127.0.0.1/tcp/${opts.wsPort}/ws`] : [])], appendAnnounce: opts.announce ?? [] },
+    ...(ws ? { connectionManager: WS_LIMITS } : {}),
+    transports,
+    connectionEncrypters: [noise()],
+    streamMuxers: [yamux()],
+    peerDiscovery: [],
+    services: { identify: identify(), routing: localOnlyRouting() }
+  } as any
+  // The public seller serves blocks only through paid fetch: bitswap would hand the dataset to any visitor for free.
+  const helia = ws ? withLibp2p(createHeliaLight(), libp2p) : createHelia({ libp2p })
   await helia.start()
   return helia
 }

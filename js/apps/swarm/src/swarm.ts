@@ -14,7 +14,7 @@ import { startKubo, type Kubo } from './kubo.ts'
 import { addContent, carBytes, checkpoint, dataset, heliaNode, tamper, type Node } from './nodes.ts'
 import { startRelay } from './relay.ts'
 import type { SellConfig, VisitorConfig } from './shared.ts'
-import { devnetPayments, mockPayments, setPending, tagPayment, type Payments, type Pending } from './payments.ts'
+import { devnetPayments, mockPayments, PUBLIC_RPC, setPending, tagPayment, type Payments, type Pending } from './payments.ts'
 import { watchDevnet, watchMock } from './txwatch.ts'
 
 export interface SwarmOptions {
@@ -232,7 +232,7 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
         running = false
       }
     },
-    sellConfig: () => ({ mode: payments.mode as 'mock' | 'devnet', scheme: payments.scheme, network: payments.network, asset: payments.asset, rpcUrl: payments.rpcUrl, relay: relay.addr, root: datasetRoot.toString() }),
+    sellConfig: () => ({ mode: payments.mode as 'mock' | 'devnet', scheme: payments.scheme, network: payments.network, asset: payments.asset, rpcUrl: payments.rpcUrl != null ? PUBLIC_RPC : undefined, relay: relay.addr, root: datasetRoot.toString() }),
     visitorConfig: () => {
       const peerId = id(seller)
       const loopback = seller.libp2p.getMultiaddrs().map(String).find(a => a.includes('/ws/'))!
@@ -241,7 +241,7 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
         mode: payments.mode as 'mock' | 'devnet',
         network: payments.network,
         asset: payments.asset,
-        rpcUrl: payments.rpcUrl,
+        rpcUrl: payments.rpcUrl != null ? PUBLIC_RPC : undefined,
         root: datasetRoot.toString(),
         seller: { peerId, payee: payeeFromPeerId(seller.libp2p.peerId)!, addrs: [opts.sellerPublicAddr != null ? `${opts.sellerPublicAddr}/p2p/${peerId}` : loopback] },
         drip: { amount: DRIP_AMOUNT.toString(), enabled: !d.paused && d.remaining > 0 && !d.lowSol }

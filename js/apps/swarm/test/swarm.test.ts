@@ -203,6 +203,26 @@ test('concurrent visitor payments are attributed separately', async () => {
   } finally { await Promise.all(buyers.map(async b => await b.stop())); await swarm.stop() }
 })
 
+test('the public seller speaks only paid fetch, not bitswap', async () => {
+  const { startBuyer } = await import('../src/buyer.ts')
+  const { FETCH_PROTOCOL } = await import('ipfs-x402')
+  const { multiaddr } = await import('@multiformats/multiaddr')
+  const { peerIdFromString } = await import('@libp2p/peer-id')
+  const swarm = await startSwarm({ mode: 'mock' })
+  const buyer = await startBuyer()
+  try {
+    const config = swarm.visitorConfig()
+    await buyer.libp2p.dial(multiaddr(config.seller.addrs[0]))
+    let protocols: string[] = []
+    for (let i = 0; i < 50 && !protocols.includes(FETCH_PROTOCOL); i++) {
+      protocols = (await buyer.libp2p.peerStore.get(peerIdFromString(config.seller.peerId)).catch(() => ({ protocols: [] }))).protocols
+      await settle(50)
+    }
+    assert.ok(protocols.includes(FETCH_PROTOCOL), 'identify finished')
+    assert.deepEqual(protocols.filter(p => p.startsWith('/ipfs/bitswap')), []) // bitswap would hand out the paid dataset for free
+  } finally { await buyer.stop(); await swarm.stop() }
+})
+
 test('a visitor peer gets 2 concurrent paid streams; the 3rd is refused busy', async () => {
   const { startBuyer } = await import('../src/buyer.ts')
   const { FETCH_PROTOCOL } = await import('ipfs-x402')
