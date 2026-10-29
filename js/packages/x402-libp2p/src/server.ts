@@ -29,8 +29,9 @@ export interface PaidOptions {
   paymentTimeoutMs?: number
   /** Bound on each gate write/close toward the peer, so a peer that stops reading cannot stall the server. Default 10s. */
   ioTimeoutMs?: number
-  /** Concurrent streams this gate serves, per remote peer and in total; beyond either it answers x402/error `busy`. Default unlimited. */
-  maxStreams?: { perPeer: number, total: number }
+  /** Concurrent streams this gate serves, per remote peer and in total; beyond either it answers x402/error `busy`. Default unlimited.
+   * `exempt` peers (e.g. the operator's own buyer) are never refused, so free PeerIds cannot crowd them out. */
+  maxStreams?: { perPeer: number, total: number, exempt?: (peer: PeerId) => boolean }
   hooks?: GateHooks
 }
 
@@ -92,7 +93,7 @@ export function paid (server: x402ResourceServer, opts: PaidOptions, handler: (c
 
     const cap = opts.maxStreams
     const mine = open.get(peer) ?? 0
-    const busy = cap != null && (mine >= cap.perPeer || total >= cap.total)
+    const busy = cap != null && cap.exempt?.(connection.remotePeer) !== true && (mine >= cap.perPeer || total >= cap.total)
     if (!busy) { open.set(peer, mine + 1); total++ }
     try {
       if (busy) return await fail('busy', 'too many open payment streams; finish one, then try again')

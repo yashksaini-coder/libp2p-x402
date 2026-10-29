@@ -60,6 +60,7 @@ interface SetupOpts {
   invoice?: (payee: string) => PaidOptions['invoice']
   handler?: (ctx: PaidContext) => Promise<void>
   hooks?: PaidOptions['hooks']
+  maxStreams?: PaidOptions['maxStreams']
 }
 
 async function setup (opts: SetupOpts = {}): Promise<{ provider: Libp2p, agent: Libp2p, settles: () => number, close: () => Promise<void> }> {
@@ -73,7 +74,8 @@ async function setup (opts: SetupOpts = {}): Promise<{ provider: Libp2p, agent: 
     resource: { url: `libp2p://${provider.peerId}${PROTOCOL}` },
     settle: opts.settle,
     invoice: opts.invoice?.(payee),
-    hooks: opts.hooks
+    hooks: opts.hooks,
+    maxStreams: opts.maxStreams
   }, opts.handler ?? echo))
   return { provider, agent, settles: facilitator.settles, close: async () => { await Promise.all([provider.stop(), agent.stop()]) } }
 }
@@ -212,4 +214,16 @@ test('gate hooks: invoice and verified fire with the remote peer', async () => {
     await assert.rejects(payAndOpen(agent, provider.getMultiaddrs()[0], PROTOCOL, payer('bad').client, { request: { root: 'x' } }))
     assert.equal(verified.length, 1, 'a payment that fails verify fires no onVerified')
   } finally { await close() }
+})
+
+test('stream cap: an exempt peer is served when the cap is full, others get busy', async () => {
+  const trusted = await node()
+  const { provider, agent, close } = await setup({ maxStreams: { perPeer: 1, total: 1, exempt: p => p.equals(trusted.peerId) } })
+  const { lpStream } = await import('@libp2p/utils')
+  const first = async (from: Libp2p): Promise<any> => JSON.parse(new TextDecoder().decode((await lpStream(await from.dialProtocol(provider.getMultiaddrs()[0], PROTOCOL)).read({ signal: AbortSignal.timeout(5000) })).subarray()))
+  try {
+    assert.equal((await first(agent)).type, 'x402/payment-required') // holds the only slot, waiting to pay
+    assert.equal((await first(trusted)).type, 'x402/payment-required')
+    assert.equal((await first(agent)).code, 'busy')
+  } finally { await trusted.stop(); await close() }
 })

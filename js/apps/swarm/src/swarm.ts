@@ -141,7 +141,7 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
   // Seller sells a dataset over paid fetch; provider sells pinning.
   const datasetRoot = await addContent(seller, dataset())
   const checkpointRoot = await addContent(agent, checkpoint())
-  await seller.libp2p.handle(FETCH_PROTOCOL, fetchHandler(seller, await visitorSellerServer(), payments.pricing(payeeFromPeerId(seller.libp2p.peerId)!), { maxBytes: MAX_BYTES, paymentTimeoutMs: 120_000, maxStreams: VISITOR_STREAMS }, visitorHooks))
+  await seller.libp2p.handle(FETCH_PROTOCOL, fetchHandler(seller, await visitorSellerServer(), payments.pricing(payeeFromPeerId(seller.libp2p.peerId)!), { maxBytes: MAX_BYTES, paymentTimeoutMs: 120_000, maxStreams: { ...VISITOR_STREAMS, exempt: p => !fromVisitor(p) } }, visitorHooks))
   await provider.libp2p.handle(PIN_PROTOCOL, pinHandler(provider, await payments.server(), payments.pricing(payeeFromPeerId(provider.libp2p.peerId)!), { maxBytes: MAX_BYTES, durationDays: 30 }, {
     onBlock: b => bus.emit({ kind: 'block', requestId: currentPayment, cid: b.cid.toString(), index: b.index, total: b.total, ok: b.ok }),
     onPinned: p => bus.emit({ kind: 'pinned', root: p.root.toString(), provider: id(provider), receiptCid: p.receipt.toString(), expiresAt: p.receiptBody.expiresAt, receipt: p.receiptBody })
