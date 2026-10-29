@@ -75,6 +75,10 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
   const drip = dev != null
     ? createDrip({ send: dev.send, feePayerLamports: dev.feePayerLamports, ledgerFile: join(opts.keysDir ?? '.keys', 'drip-ledger.json') })
     : createDrip({ send: async () => '', feePayerLamports: async () => DRIP_LIMITS.minFeePayerLamports })
+  // lowSol follows the real balance, so drip.enabled recovers after a top-up without any visitor request.
+  await drip.refresh().catch(err => console.error(`drip balance check failed: ${String(err)}`))
+  const balanceTimer = setInterval(() => { drip.refresh().catch(() => {}) }, 30_000)
+  balanceTimer.unref()
 
   const hello = { kind: 'hello', mode: payments.mode, network: payments.network, explorer: 'https://explorer.solana.com/tx/{sig}?cluster=devnet' } as const
   bus.emit(hello)
@@ -242,6 +246,7 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
     facilitator: payments.facilitator,
     drip,
     stop: async () => {
+      clearInterval(balanceTimer)
       await Promise.all([relay.libp2p.stop(), agent.stop(), seller.stop(), provider.stop(), kubo?.stop()])
     }
   }

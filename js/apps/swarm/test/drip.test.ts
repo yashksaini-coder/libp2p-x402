@@ -150,3 +150,20 @@ test('pause requires the token', async () => {
     assert.equal((await refused.json()).error, 'paused')
   } finally { server.close(); await swarm.stop() }
 })
+
+test('an ambiguous send failure keeps the address claimed', async () => {
+  const drip = createDrip({ feePayerLamports: SOL, send: async () => { throw Object.assign(new Error('not confirmed'), { ambiguous: true }) } })
+  assert.equal(code(await drip.request(addr(0), '1.1.1.1')), 'send_failed')
+  assert.equal(code(await drip.request(addr(0), '1.1.1.1')), 'already_dripped')
+  assert.equal(drip.status().sent, 1)
+})
+
+test('refresh makes status follow the fee payer balance', async () => {
+  let lamports = 1n
+  const drip = createDrip({ feePayerLamports: async () => lamports, send: async () => 's' })
+  await drip.refresh()
+  assert.equal(drip.status().lowSol, true)
+  lamports = 1_000_000_000n
+  await drip.refresh()
+  assert.equal(drip.status().lowSol, false)
+})

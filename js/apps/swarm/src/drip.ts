@@ -2,8 +2,8 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import {
   appendTransactionMessageInstructions, createKeyPairSignerFromBytes, createSolanaRpc, createTransactionMessage, fetchEncodedAccounts,
-  getBase64EncodedWireTransaction, getSignatureFromTransaction, isAddress, pipe, setTransactionMessageFeePayerSigner,
-  setTransactionMessageLifetimeUsingBlockhash, signTransactionMessageWithSigners, address as toAddress,
+  getBase64EncodedWireTransaction, getSignatureFromTransaction, isAddress, isSolanaError, pipe, setTransactionMessageFeePayerSigner,
+  SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE, setTransactionMessageLifetimeUsingBlockhash, signTransactionMessageWithSigners, address as toAddress,
   type Address, type Blockhash, type Instruction, type Signature, type TransactionSigner
 } from '@solana/kit'
 import { TOKEN_PROGRAM_ADDRESS, findAssociatedTokenPda, getCreateAssociatedTokenIdempotentInstructionAsync, getTransferCheckedInstruction } from '@solana-program/token'
@@ -24,7 +24,12 @@ export interface Drip {
   pause: (on: boolean) => void
   /** lowSol: the last balance check found the fee payer under the minimum. */
   status: () => { paused: boolean, sent: number, remaining: number, lowSol: boolean }
+  /** Re-check the fee payer balance so status().lowSol follows top-ups. Throws when the RPC does. */
+  refresh: () => Promise<void>
 }
+
+/** A send error with `ambiguous: true` may still land on chain: the address stays claimed. */
+const isAmbiguous = (err: any): boolean => err?.ambiguous === true
 
 export interface DripOptions {
   send: (address: string) => Promise<string>
@@ -56,18 +61,28 @@ export function createDrip (opts: DripOptions): Drip {
   }
   const refuse = (code: DripCode, message: string): DripResult => ({ ok: false, code, message })
 
+  const save = (address: string): void => {
+    ledger[address] = new Date(now()).toISOString()
+    if (opts.ledgerFile != null) {
+      try { writeFileSync(opts.ledgerFile, JSON.stringify(ledger, null, 1), { mode: 0o600 }) } catch (err) { console.error(`drip ledger not saved: ${String(err)}`) }
+    }
+  }
+  const refresh = async (): Promise<void> => { lowSol = await opts.feePayerLamports() < limits.minFeePayerLamports }
+
   const run = async (address: string, release: () => void): Promise<DripResult> => {
     try {
-      lowSol = await opts.feePayerLamports() < limits.minFeePayerLamports
+      await refresh()
       if (lowSol) { release(); return refuse('low_sol', 'The booth fee payer is low on SOL. Ask the presenter to top it up, then try again.') }
       const signature = await opts.send(address)
-      ledger[address] = new Date(now()).toISOString()
-      if (opts.ledgerFile != null) {
-        try { writeFileSync(opts.ledgerFile, JSON.stringify(ledger, null, 1), { mode: 0o600 }) } catch (err) { console.error(`drip ledger not saved: ${String(err)}`) }
-      }
+      save(address)
       return { ok: true, signature }
     } catch (err: any) {
-      if (ledger[address] == null) release()
+      // Submitted but not confirmed: it may still land, so keep the address (and its stamps) claimed.
+      if (isAmbiguous(err)) {
+        save(address)
+        return refuse('send_failed', `The drip transaction may still land (${String(err?.message ?? err)}). Check your wallet in a minute before asking again.`)
+      }
+      release()
       return refuse('send_failed', `The drip transaction failed (${String(err?.message ?? err)}). Try again in a minute.`)
     }
   }
@@ -99,6 +114,7 @@ export function createDrip (opts: DripOptions): Drip {
       return await result
     },
     pause: (on) => { paused = on },
+    refresh,
     status: () => ({ paused, sent: Object.keys(ledger).length, remaining: Math.max(0, limits.total - claimed.size), lowSol })
   }
 }
@@ -120,29 +136,45 @@ export async function buildDripTransaction (o: { feePayer: TransactionSigner, ag
 }
 
 /** Devnet: the real drip send, the fee payer's balance, and the payee token accounts the seller and provider are paid into. */
+/** The transaction definitely did not and cannot land (rejected, failed on chain, or expired). */
+class Definite extends Error {}
+
 export async function devnetDrip (keys: Record<KeyRole, RoleKey>, onSubmit: OnSubmit) {
   const rpc = createSolanaRpc(DEVNET_RPC)
   const [feePayer, agent] = await Promise.all([createKeyPairSignerFromBytes(keys.feepayer.secret), createKeyPairSignerFromBytes(keys.agent.secret)])
   const mint = toAddress(USDC_DEVNET_ADDRESS)
 
   const confirm = async (signature: Signature, lastValidBlockHeight: bigint): Promise<void> => {
-    const deadline = Date.now() + 60_000
-    while (Date.now() < deadline) {
+    for (;;) {
       const { value: [status] } = await rpc.getSignatureStatuses([signature]).send()
-      if (status?.err != null) throw new Error(`transaction ${signature} failed: ${JSON.stringify(status.err, (_k, v) => typeof v === 'bigint' ? String(v) : v)}`)
+      if (status?.err != null) throw new Definite(`transaction ${signature} failed: ${JSON.stringify(status.err, (_k, v) => typeof v === 'bigint' ? String(v) : v)}`)
       if (status?.confirmationStatus === 'confirmed' || status?.confirmationStatus === 'finalized') return
-      if (await rpc.getBlockHeight().send() > lastValidBlockHeight) throw new Error(`transaction ${signature} expired`)
+      if (await rpc.getBlockHeight().send() > lastValidBlockHeight) {
+        // Past the last valid block height it can no longer land; one last look closes the race with the check above.
+        const { value: [last] } = await rpc.getSignatureStatuses([signature], { searchTransactionHistory: true }).send()
+        if (last?.err == null && last?.confirmationStatus != null) return
+        throw new Definite(`transaction ${signature} expired`)
+      }
       await new Promise(resolve => setTimeout(resolve, 500))
     }
-    throw new Error(`transaction ${signature} not confirmed in 60 s`)
   }
   const submit = async (build: (lifetime: { blockhash: Blockhash, lastValidBlockHeight: bigint }) => ReturnType<typeof buildDripTransaction>, paymentId?: string): Promise<string> => {
     const { value: lifetime } = await rpc.getLatestBlockhash({ commitment: 'confirmed' }).send()
     const tx = await build(lifetime)
     const signature = getSignatureFromTransaction(tx)
-    await rpc.sendTransaction(getBase64EncodedWireTransaction(tx), { encoding: 'base64' }).send()
+    try {
+      // Preflight at the commitment of the blockhash, or the finalized bank may not know it yet.
+      await rpc.sendTransaction(getBase64EncodedWireTransaction(tx), { encoding: 'base64', preflightCommitment: 'confirmed' }).send()
+    } catch (err: any) {
+      if (isSolanaError(err, SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE)) throw new Definite(String(err?.message ?? err))
+      throw Object.assign(err, { ambiguous: true }) // network failure: the RPC may have accepted it
+    }
     if (paymentId != null) onSubmit(signature, Date.now(), paymentId)
-    await confirm(signature, lifetime.lastValidBlockHeight)
+    try {
+      await confirm(signature, lifetime.lastValidBlockHeight)
+    } catch (err: any) {
+      throw err instanceof Definite ? err : Object.assign(err, { ambiguous: true })
+    }
     return signature
   }
 
