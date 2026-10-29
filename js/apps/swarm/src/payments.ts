@@ -1,16 +1,15 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { randomUUID } from 'node:crypto'
 import { x402Client } from '@x402/core/client'
 import { x402Facilitator } from '@x402/core/facilitator'
 import { x402ResourceServer, type FacilitatorClient } from '@x402/core/server'
-import type { Network, PaymentPayload, SchemeNetworkClient } from '@x402/core/types'
+import type { Network, PaymentPayload } from '@x402/core/types'
 import { USDC_DEVNET_ADDRESS, toFacilitatorSvmSigner, type FacilitatorSvmSigner } from '@x402/svm'
 import { ExactSvmScheme as ExactSvmClient } from '@x402/svm/exact/client'
 import { registerExactSvmScheme as registerFacilitatorScheme } from '@x402/svm/exact/facilitator'
 import { registerExactSvmScheme as registerServerScheme } from '@x402/svm/exact/server'
 import { createKeyPairSignerFromBytes } from '@solana/kit'
 import type { Pricing } from 'ipfs-x402'
-import { mockSchemeServer, priceFor } from './shared.ts'
+import { mockSchemeClient, mockSchemeServer, priceFor } from './shared.ts'
 import type { Mode } from './events.ts'
 import type { KeyRole, RoleKey } from './keys.ts'
 
@@ -116,14 +115,12 @@ export async function mockPayments (onSubmit: OnSubmit): Promise<Payments> {
     },
     getSupported: async () => ({ kinds: [{ x402Version: 2, scheme: 'mock', network: DEVNET }], extensions: [], signers: {} })
   }
-  // A nonce, as real payloads have: an agent payment that never settles (scene 2) must not share a tag queue with visitors.
-  const schemeClient: SchemeNetworkClient = { scheme: 'mock', createPaymentPayload: async () => ({ x402Version: 2, payload: { sig: 'mock', nonce: randomUUID() } }) }
   return {
     mode: 'mock',
     network: DEVNET,
     asset: 'USDC',
     scheme: 'mock',
-    client: new x402Client().register(DEVNET, schemeClient).setSpendControls(false),
+    client: new x402Client().register(DEVNET, mockSchemeClient).setSpendControls(false),
     server: async () => {
       const server = new x402ResourceServer(facilitator).register(DEVNET, mockSchemeServer)
       await server.initialize()
