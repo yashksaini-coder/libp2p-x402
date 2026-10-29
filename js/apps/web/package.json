@@ -10,7 +10,8 @@
     "start:public": "NEXT_DIST_DIR=.next-public next start",
     "build:presenter": "NEXT_DIST_DIR=.next-presenter next build",
     "test": "node --test --test-timeout=60000 lib/reduce.test.ts lib/try/wallet.test.ts lib/try/flow.test.ts",
-    "e2e:sell": "node scripts/sell-e2e.ts"
+    "e2e:sell": "node scripts/sell-e2e.ts",
+    "e2e:try": "node scripts/try-e2e.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

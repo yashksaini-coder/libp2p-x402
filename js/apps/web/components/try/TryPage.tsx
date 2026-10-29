@@ -4,12 +4,12 @@ import { useEffect, useState } from 'react'
 import { useConnect, type UiWallet, type UiWalletAccount } from '@wallet-standard/react'
 import { ArrowUpRight } from '@phosphor-icons/react'
 import { TRY_URL, explorerTx } from '@/lib/config'
-import { accountUsable } from '@/lib/try/wallet'
+import { E2E_WALLET, accountUsable } from '@/lib/try/wallet'
 import { walletBrowseLinks } from '@/lib/try/deeplinks'
 import { PURCHASE_USDC, type FlowState, type Step } from '@/lib/try/flow'
 import { useVisitor, type VisitorConfig } from '@/lib/try/useVisitor'
 import { Eyebrow, Mono, Panel, cx, short } from '@/components/ui'
-import { SignerBridge, WalletProvider } from './WalletProvider'
+import { E2EConnect, SignerBridge, WalletProvider, e2eFlags } from './WalletProvider'
 import { StepCard, type CardState } from './StepCard'
 import { TopBar } from './TopBar'
 import { Receipt } from './Receipt'
@@ -43,9 +43,17 @@ function Visitor() {
   const usable = account ? accountUsable(account) : undefined
   const address = usable?.ok ? account!.address : undefined
   const p = state.purchase
+  const [e2e] = useState(e2eFlags)
+  const e2eWallet = e2e.e2e && !account ? v.wallets.find((w) => w.name === E2E_WALLET) : undefined
+  // ?autobuy=1: drip as soon as the fund step shows; the buy then starts by itself (mock pays without a click).
+  const { drip } = v
+  useEffect(() => {
+    if (e2e.autobuy && state.step === 'fund' && state.drip?.status === 'idle') void drip()
+  }, [e2e.autobuy, state.step, state.drip?.status, drip])
 
   return (
     <main id="main" className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-4 sm:py-8 lg:max-w-6xl">
+      {e2eWallet && <E2EConnect wallet={e2eWallet} onAccount={v.connect} />}
       {account && usable?.ok && config?.mode === 'devnet' && <SignerBridge account={account} onSigner={v.setSigner} />}
       <TopBar state={state} offline={v.offline} address={address} onDisconnect={v.disconnect} />
       <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,32rem)_minmax(0,1fr)] lg:items-start lg:gap-10">

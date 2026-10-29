@@ -8,3 +8,6 @@ export function accountUsable(account: { chains: readonly string[], features: re
   if (!account.features.includes('solana:signTransaction')) return { ok: false, reason: 'no_sign_transaction' }
   return { ok: true }
 }
+
+/** The fake wallet in E2E builds (lib/try/e2eWallet.ts). */
+export const E2E_WALLET = 'E2E wallet'
