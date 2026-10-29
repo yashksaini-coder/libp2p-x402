@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type Server } from 'node:http'
 import type { FacilitatorClient } from '@x402/core/server'
 import { timingSafeEqual } from 'node:crypto'
 import type { Bus } from './bus.ts'
+import type { Drip, DripCode } from './drip.ts'
 import type { SwarmEventBody } from './events.ts'
 import type { SellConfig, VisitorConfig } from './shared.ts'
 
@@ -15,7 +16,10 @@ export interface Control {
   visitorConfig?: () => VisitorConfig
   allowTab?: (peerId: string) => Promise<void>
   facilitator?: FacilitatorClient
+  drip?: Drip
 }
+
+const DRIP_STATUS: Record<DripCode, number> = { invalid_address: 400, already_dripped: 409, rate_limited: 429, paused: 503, budget_spent: 503, low_sol: 503, send_failed: 502 }
 
 const LOCAL_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/
 
@@ -38,7 +42,7 @@ function tokenOk (header: string | undefined, token: string): boolean {
 
 /**
  * GET /events (SSE), POST /scenes/:n (token), GET /health. Bind to loopback only.
- * For visitors: GET /visitor/config (public). For browser sellers: GET /sell/config, POST /sell/register { peerId } (token), and the standard x402 facilitator API under
+ * For visitors: GET /visitor/config and POST /visitor/drip { address } (public), POST /visitor/pause { paused } (token). For browser sellers: GET /sell/config, POST /sell/register { peerId } (token), and the standard x402 facilitator API under
  * /facilitator (verify, settle, supported; token) backed by the in-process facilitator.
  */
 export async function serve (c: Control, port: number, host = '127.0.0.1'): Promise<{ server: Server, port: number }> {
@@ -78,6 +82,33 @@ export async function serve (c: Control, port: number, host = '127.0.0.1'): Prom
 
     if (req.method === 'GET' && url.pathname === '/visitor/config' && c.visitorConfig != null) {
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(c.visitorConfig()))
+      return
+    }
+
+    if (req.method === 'POST' && url.pathname === '/visitor/drip' && c.drip != null) {
+      const drip = c.drip
+      // Behind the tunnel every request comes from loopback; Cloudflare names the visitor.
+      const cf = req.headers['cf-connecting-ip']
+      const ip = (Array.isArray(cf) ? cf[0] : cf) ?? req.socket.remoteAddress
+      const send = (status: number, body: unknown): void => { res.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify(body)) }
+      json(req).then(async body => await drip.request(String(body?.address ?? ''), ip)).then(
+        r => {
+          if (r.ok) send(200, c.hello.mode === 'mock' ? { signature: null, mock: true } : { signature: r.signature })
+          else send(DRIP_STATUS[r.code], { error: r.code, message: r.message })
+        },
+        () => send(400, { error: 'bad_request', message: 'The request body is not JSON with an address. Send { "address": "..." }.' })
+      )
+      return
+    }
+
+    if (req.method === 'POST' && url.pathname === '/visitor/pause' && c.drip != null) {
+      if (!tokenOk(req.headers.authorization, c.token)) { res.writeHead(401).end('bad token'); return }
+      const drip = c.drip
+      json(req).then(({ paused }) => {
+        if (typeof paused !== 'boolean') throw new Error('paused must be true or false')
+        drip.pause(paused)
+        res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(drip.status()))
+      }).catch(err => res.writeHead(400).end(String(err?.message ?? err)))
       return
     }
 

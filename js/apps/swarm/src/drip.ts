@@ -1,0 +1,166 @@
+// Booth drip: 0.01 test USDC to a visitor's devnet wallet, once per address, within limits.
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  appendTransactionMessageInstructions, createKeyPairSignerFromBytes, createSolanaRpc, createTransactionMessage, fetchEncodedAccounts,
+  getBase64EncodedWireTransaction, getSignatureFromTransaction, isAddress, pipe, setTransactionMessageFeePayerSigner,
+  setTransactionMessageLifetimeUsingBlockhash, signTransactionMessageWithSigners, address as toAddress,
+  type Address, type Blockhash, type Instruction, type Signature, type TransactionSigner
+} from '@solana/kit'
+import { TOKEN_PROGRAM_ADDRESS, findAssociatedTokenPda, getCreateAssociatedTokenIdempotentInstructionAsync, getTransferCheckedInstruction } from '@solana-program/token'
+import { USDC_DEVNET_ADDRESS } from '@x402/svm'
+import { USDC_DECIMALS } from './events.ts'
+import type { KeyRole, RoleKey } from './keys.ts'
+import { DEVNET_RPC, type OnSubmit } from './payments.ts'
+
+export interface DripLimits { perIpPerHour: number, globalPerHour: number, total: number, minFeePayerLamports: bigint }
+export const DRIP_LIMITS: DripLimits = { perIpPerHour: 3, globalPerHour: 60, total: 500, minFeePayerLamports: 100_000_000n }
+export const DRIP_AMOUNT = 10_000n // 0.01 USDC
+
+export type DripCode = 'invalid_address' | 'already_dripped' | 'rate_limited' | 'paused' | 'budget_spent' | 'low_sol' | 'send_failed'
+export type DripResult = { ok: true, signature: string } | { ok: false, code: DripCode, message: string }
+
+export interface Drip {
+  request: (address: string, ip?: string) => Promise<DripResult>
+  pause: (on: boolean) => void
+  /** lowSol: the last balance check found the fee payer under the minimum. */
+  status: () => { paused: boolean, sent: number, remaining: number, lowSol: boolean }
+}
+
+export interface DripOptions {
+  send: (address: string) => Promise<string>
+  /** address -> ISO time of the drip. Omit to keep the ledger in memory (mock). */
+  ledgerFile?: string
+  now?: () => number
+  feePayerLamports: () => Promise<bigint>
+  limits?: Partial<DripLimits>
+}
+
+const HOUR = 3_600_000
+
+export function createDrip (opts: DripOptions): Drip {
+  const limits = { ...DRIP_LIMITS, ...opts.limits }
+  const now = opts.now ?? Date.now
+  const ledger: Record<string, string> = opts.ledgerFile != null && existsSync(opts.ledgerFile) ? JSON.parse(readFileSync(opts.ledgerFile, 'utf8')) : {}
+  // Sent plus in flight: an address is claimed before its send, so a concurrent duplicate is refused.
+  const claimed = new Set(Object.keys(ledger))
+  // ponytail: one timestamp list per IP, pruned on lookup; a flood of distinct IPs is capped by the global limit.
+  const stamps = new Map<string, number[]>()
+  let paused = false
+  let lowSol = false
+  let queue: Promise<unknown> = Promise.resolve()
+
+  const recent = (key: string, t: number): number[] => {
+    const list = (stamps.get(key) ?? []).filter(s => t - s < HOUR)
+    if (list.length === 0) stamps.delete(key); else stamps.set(key, list)
+    return list
+  }
+  const refuse = (code: DripCode, message: string): DripResult => ({ ok: false, code, message })
+
+  const run = async (address: string, release: () => void): Promise<DripResult> => {
+    try {
+      lowSol = await opts.feePayerLamports() < limits.minFeePayerLamports
+      if (lowSol) { release(); return refuse('low_sol', 'The booth fee payer is low on SOL. Ask the presenter to top it up, then try again.') }
+      const signature = await opts.send(address)
+      ledger[address] = new Date(now()).toISOString()
+      if (opts.ledgerFile != null) {
+        try { writeFileSync(opts.ledgerFile, JSON.stringify(ledger, null, 1), { mode: 0o600 }) } catch (err) { console.error(`drip ledger not saved: ${String(err)}`) }
+      }
+      return { ok: true, signature }
+    } catch (err: any) {
+      if (ledger[address] == null) release()
+      return refuse('send_failed', `The drip transaction failed (${String(err?.message ?? err)}). Try again in a minute.`)
+    }
+  }
+
+  return {
+    request: async (address, ip) => {
+      if (!isAddress(address)) return refuse('invalid_address', 'That is not a Solana address. Paste your wallet address and try again.')
+      if (paused) return refuse('paused', 'Test USDC is paused at the booth. Try again in a few minutes.')
+      if (claimed.has(address)) return refuse('already_dripped', 'This address already got its test USDC. Each address gets one drip.')
+      if (claimed.size >= limits.total) return refuse('budget_spent', 'The booth has given out all its test USDC. Get devnet USDC from faucet.circle.com instead.')
+      const t = now()
+      const global = recent('', t)
+      const perIp = ip != null ? recent(`ip:${ip}`, t) : []
+      if (global.length >= limits.globalPerHour) return refuse('rate_limited', 'The booth has reached its hourly drip limit. Try again later this hour.')
+      if (perIp.length >= limits.perIpPerHour) return refuse('rate_limited', 'Too many drips from your network this hour. Try again in an hour.')
+      claimed.add(address)
+      stamps.set('', [...global, t])
+      if (ip != null) stamps.set(`ip:${ip}`, [...perIp, t])
+      const release = (): void => {
+        claimed.delete(address)
+        for (const key of ip != null ? ['', `ip:${ip}`] : ['']) {
+          const list = stamps.get(key)
+          const i = list?.indexOf(t) ?? -1
+          if (i >= 0) list!.splice(i, 1)
+        }
+      }
+      const result = queue.then(async () => await run(address, release))
+      queue = result
+      return await result
+    },
+    pause: (on) => { paused = on },
+    status: () => ({ paused, sent: Object.keys(ledger).length, remaining: Math.max(0, limits.total - claimed.size), lowSol })
+  }
+}
+
+/** Fee payer pays the fees and the visitor's token account rent; the agent's USDC moves. Built offline so tests can decode it. */
+export async function buildDripTransaction (o: { feePayer: TransactionSigner, agent: TransactionSigner, owner: Address, mint: Address, lifetime: { blockhash: Blockhash, lastValidBlockHeight: bigint } }) {
+  const [source] = await findAssociatedTokenPda({ owner: o.agent.address, mint: o.mint, tokenProgram: TOKEN_PROGRAM_ADDRESS })
+  const [destination] = await findAssociatedTokenPda({ owner: o.owner, mint: o.mint, tokenProgram: TOKEN_PROGRAM_ADDRESS })
+  const instructions = [
+    await getCreateAssociatedTokenIdempotentInstructionAsync({ payer: o.feePayer, owner: o.owner, mint: o.mint }),
+    getTransferCheckedInstruction({ source, mint: o.mint, destination, authority: o.agent, amount: DRIP_AMOUNT, decimals: USDC_DECIMALS })
+  ]
+  return await signTransactionMessageWithSigners(pipe(
+    createTransactionMessage({ version: 0 }),
+    m => setTransactionMessageFeePayerSigner(o.feePayer, m),
+    m => setTransactionMessageLifetimeUsingBlockhash(o.lifetime, m),
+    m => appendTransactionMessageInstructions(instructions as Instruction[], m)
+  ))
+}
+
+/** Devnet: the real drip send, the fee payer's balance, and the payee token accounts the seller and provider are paid into. */
+export async function devnetDrip (keys: Record<KeyRole, RoleKey>, onSubmit: OnSubmit) {
+  const rpc = createSolanaRpc(DEVNET_RPC)
+  const [feePayer, agent] = await Promise.all([createKeyPairSignerFromBytes(keys.feepayer.secret), createKeyPairSignerFromBytes(keys.agent.secret)])
+  const mint = toAddress(USDC_DEVNET_ADDRESS)
+
+  const confirm = async (signature: Signature, lastValidBlockHeight: bigint): Promise<void> => {
+    const deadline = Date.now() + 60_000
+    while (Date.now() < deadline) {
+      const { value: [status] } = await rpc.getSignatureStatuses([signature]).send()
+      if (status?.err != null) throw new Error(`transaction ${signature} failed: ${JSON.stringify(status.err, (_k, v) => typeof v === 'bigint' ? String(v) : v)}`)
+      if (status?.confirmationStatus === 'confirmed' || status?.confirmationStatus === 'finalized') return
+      if (await rpc.getBlockHeight().send() > lastValidBlockHeight) throw new Error(`transaction ${signature} expired`)
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+    throw new Error(`transaction ${signature} not confirmed in 60 s`)
+  }
+  const submit = async (build: (lifetime: { blockhash: Blockhash, lastValidBlockHeight: bigint }) => ReturnType<typeof buildDripTransaction>, paymentId?: string): Promise<string> => {
+    const { value: lifetime } = await rpc.getLatestBlockhash({ commitment: 'confirmed' }).send()
+    const tx = await build(lifetime)
+    const signature = getSignatureFromTransaction(tx)
+    await rpc.sendTransaction(getBase64EncodedWireTransaction(tx), { encoding: 'base64' }).send()
+    if (paymentId != null) onSubmit(signature, Date.now(), paymentId)
+    await confirm(signature, lifetime.lastValidBlockHeight)
+    return signature
+  }
+
+  let n = 0
+  return {
+    send: async (owner: string): Promise<string> => await submit(async lifetime => await buildDripTransaction({ feePayer, agent, owner: toAddress(owner), mint, lifetime }), `drip-${++n}`),
+    feePayerLamports: async (): Promise<bigint> => (await rpc.getBalance(feePayer.address).send()).value,
+    /** One transaction of idempotent creates; skipped when every account already exists. */
+    ensurePayeeAccounts: async (owners: string[]): Promise<string | undefined> => {
+      const atas = await Promise.all(owners.map(async owner => (await findAssociatedTokenPda({ owner: toAddress(owner), mint, tokenProgram: TOKEN_PROGRAM_ADDRESS }))[0]))
+      if ((await fetchEncodedAccounts(rpc, atas)).every(a => a.exists)) return undefined
+      const instructions = await Promise.all(owners.map(async owner => await getCreateAssociatedTokenIdempotentInstructionAsync({ payer: feePayer, owner: toAddress(owner), mint })))
+      return await submit(async lifetime => await signTransactionMessageWithSigners(pipe(
+        createTransactionMessage({ version: 0 }),
+        m => setTransactionMessageFeePayerSigner(feePayer, m),
+        m => setTransactionMessageLifetimeUsingBlockhash(lifetime, m),
+        m => appendTransactionMessageInstructions(instructions as Instruction[], m)
+      )))
+    }
+  }
+}

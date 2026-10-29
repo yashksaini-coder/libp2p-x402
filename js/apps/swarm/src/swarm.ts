@@ -5,7 +5,9 @@ import type { FacilitatorClient } from '@x402/core/server'
 import { peerIdFromString } from '@libp2p/peer-id'
 import { multiaddr } from '@multiformats/multiaddr'
 import type { CID } from 'multiformats/cid'
+import { join } from 'node:path'
 import { Bus } from './bus.ts'
+import { DRIP_AMOUNT, DRIP_LIMITS, createDrip, devnetDrip, type Drip } from './drip.ts'
 import type { Mode, Role, SwarmEventBody } from './events.ts'
 import { ephemeralKeys, loadKeys } from './keys.ts'
 import { startKubo, type Kubo } from './kubo.ts'
@@ -41,6 +43,8 @@ export interface Swarm {
   /** POST /sell/register: a tab proves the control token before the relay treats it as a seller. */
   allowTab: (peerId: string) => Promise<void>
   facilitator: FacilitatorClient
+  /** POST /visitor/drip and /visitor/pause: test USDC for visitors (mock: limits apply, nothing is sent). */
+  drip: Drip
   stop: () => Promise<void>
 }
 
@@ -64,6 +68,13 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
       .catch(err => bus.emit({ kind: 'error', code: 'tx_watch_failed', message: String(err?.message ?? err), settled: false }))
   }
   const payments: Payments = opts.mode === 'devnet' ? await devnetPayments(keys, onSubmit) : await mockPayments(onSubmit)
+
+  // Devnet: the seller and provider must hold USDC accounts before anyone can pay them.
+  const dev = opts.mode === 'devnet' ? await devnetDrip(keys, onSubmit) : undefined
+  if (dev != null) await dev.ensurePayeeAccounts([keys.seller.address, keys.provider.address])
+  const drip = dev != null
+    ? createDrip({ send: dev.send, feePayerLamports: dev.feePayerLamports, ledgerFile: join(opts.keysDir ?? '.keys', 'drip-ledger.json') })
+    : createDrip({ send: async () => '', feePayerLamports: async () => DRIP_LIMITS.minFeePayerLamports })
 
   const hello = { kind: 'hello', mode: payments.mode, network: payments.network, explorer: 'https://explorer.solana.com/tx/{sig}?cluster=devnet' } as const
   bus.emit(hello)
@@ -216,6 +227,7 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
     visitorConfig: () => {
       const peerId = id(seller)
       const loopback = seller.libp2p.getMultiaddrs().map(String).find(a => a.includes('/ws/'))!
+      const d = drip.status()
       return {
         mode: payments.mode as 'mock' | 'devnet',
         network: payments.network,
@@ -223,11 +235,12 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
         rpcUrl: payments.rpcUrl,
         root: datasetRoot.toString(),
         seller: { peerId, payee: payeeFromPeerId(seller.libp2p.peerId)!, addrs: [opts.sellerPublicAddr != null ? `${opts.sellerPublicAddr}/p2p/${peerId}` : loopback] },
-        drip: { amount: '10000', enabled: true }
+        drip: { amount: DRIP_AMOUNT.toString(), enabled: !d.paused && d.remaining > 0 && !d.lowSol }
       }
     },
     allowTab: async (peerId) => { await relay.allow(peerIdFromString(peerId)) },
     facilitator: payments.facilitator,
+    drip,
     stop: async () => {
       await Promise.all([relay.libp2p.stop(), agent.stop(), seller.stop(), provider.stop(), kubo?.stop()])
     }
