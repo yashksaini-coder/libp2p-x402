@@ -17,8 +17,11 @@ Run each in its own terminal, from the repo root.
 
 1. Swarm on devnet (fee payer and USDC funded first):
    `cd js/apps/swarm && SELLER_HOST=$SELLER_HOST TRY_ORIGIN=https://$TRY_HOST SWARM_TOKEN=<secret> node src/main.ts --mode devnet`
-2. Public build (empty swarm token, no scene controls):
+2. Public build (empty swarm token, no scene controls). `TRY_HOST` must be exported: the build bakes in
+   `https://$TRY_HOST` as the swarm URL (the tunnel routes `/events` and `/visitor` there) and
+   `https://$TRY_HOST/try` for the wallet deeplinks, and refuses to build without it:
    `cd js/apps/web && npm run build:public && npm run start:public` (port 3000)
+   Check: `grep -rl 127.0.0.1:4402 .next-public/static` finds nothing.
 3. Presenter build on localhost, with the token:
    `cd js/apps/web && NEXT_PUBLIC_SWARM_TOKEN=<secret> NEXT_DIST_DIR=.next-presenter npx next dev -p 3005`
 4. Tunnel: `cloudflared tunnel --protocol http2 run booth`
@@ -41,7 +44,7 @@ Stop all drips: `curl -X POST localhost:4402/visitor/pause -H "Authorization: Be
 
 ## Fallbacks
 
-- Tunnel or venue network down: visitors use the booth laptop at `http://localhost:3005/try`.
+- Tunnel or venue network down: visitors use the booth laptop at `http://localhost:3005/try` with the booth demo wallet (a wallet in a browser profile, funded like any visitor). On localhost the page labels it "Booth wallet", so it is never passed off as the visitor's own.
 - Devnet down or out of funds: `cd js/apps/swarm && node src/main.ts --replay <recording.jsonl>` (labelled REPLAY on screen, never live); pause drips first.
 
 ## Phone rehearsal (pending)

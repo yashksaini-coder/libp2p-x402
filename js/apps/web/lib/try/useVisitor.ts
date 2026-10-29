@@ -99,6 +99,17 @@ export function useVisitor() {
     return () => { live = false }
   }, [address, config, refreshBalance])
 
+  // The RPC sees the new balance once the drip confirms: check a few times, then say it is late.
+  const waitForBalance = useCallback(async (address: string) => {
+    for (let i = 0; i < 15; i++) {
+      const usdc = await refreshBalance(address).catch(() => 0)
+      dispatch({ kind: 'balance', usdc })
+      if (usdc >= PURCHASE_USDC) return
+      await new Promise((r) => setTimeout(r, 2000))
+    }
+    dispatch({ kind: 'drip-late' })
+  }, [refreshBalance])
+
   const drip = useCallback(async () => {
     if (!config || !address) return
     dispatch({ kind: 'drip-sending' })
@@ -113,17 +124,18 @@ export function useVisitor() {
       }
       if (!res.ok) { dispatch({ kind: 'drip-failed', code: j.error, message: j.message }); return }
       dispatch({ kind: 'drip-sent', signature: j.signature })
-      // The RPC sees the new balance once the drip confirms: check a few times, then stop.
-      for (let i = 0; i < 15; i++) {
-        const usdc = await refreshBalance(address).catch(() => 0)
-        dispatch({ kind: 'balance', usdc })
-        if (usdc >= PURCHASE_USDC) return
-        await new Promise((r) => setTimeout(r, 2000))
-      }
+      await waitForBalance(address)
     } catch {
       dispatch({ kind: 'drip-failed', code: 'unreachable', message: 'The booth did not answer. Check your connection, then try again.' })
     }
-  }, [config, address, refreshBalance])
+  }, [config, address, refreshBalance, waitForBalance])
+
+  // A drip slower than the polling window: the visitor asks for another round.
+  const checkBalance = useCallback(async () => {
+    if (!address || !state.drip?.signature) return
+    dispatch({ kind: 'drip-sent', signature: state.drip.signature })
+    await waitForBalance(address)
+  }, [address, state.drip?.signature, waitForBalance])
 
   const buy = useCallback(async () => {
     if (!config || !address || inflight.current) return
@@ -137,7 +149,9 @@ export function useVisitor() {
     let timedOut = false
     let badBlock = false
     // Devnet: the wallet is asked only after the visitor presses Pay (approve.current).
+    let mine: (() => void) | undefined
     const approved = new Promise<void>((resolve, reject) => {
+      mine = resolve
       approve.current = resolve
       ac.signal.addEventListener('abort', () => reject(ac.signal.reason), { once: true })
     })
@@ -183,7 +197,8 @@ export function useVisitor() {
       if (!badBlock && !(ac.signal.aborted && !timedOut)) dispatch({ kind: 'failed', ...explain(err, timedOut) })
     } finally {
       clearTimeout(timer)
-      approve.current = undefined
+      // A superseded run unwinds after its replacement set its own resolver: clear only ours.
+      if (approve.current === mine) approve.current = undefined
       if (inflight.current === ac) inflight.current = undefined
     }
   }, [config, address, refreshBalance])
@@ -199,14 +214,17 @@ export function useVisitor() {
     dispatch({ kind: 'signing', at: Date.now() })
   }, [])
 
-  const retry = useCallback(() => {
+  const retry = useCallback(async () => {
     inflight.current?.abort()
     inflight.current = undefined
+    // The last purchase may have spent the drip: re-read the balance so retry lands on fund instead.
+    // The error is still showing meanwhile, so no purchase starts before the answer.
+    if (config?.rpcUrl && address) await refreshBalance(address).then((usdc) => dispatch({ kind: 'balance', usdc }), () => {})
     dispatch({ kind: 'retry' })
-  }, [])
+  }, [config, address, refreshBalance])
 
   const connect = setAccount
   const disconnect = useCallback(() => setAccount(undefined), [setAccount])
 
-  return { state: state as FlowState, config, offline, deadline, timing, settledTx, account, wallets, setSigner, connect, disconnect, drip, buy, pay, retry }
+  return { state: state as FlowState, config, offline, deadline, timing, settledTx, account, wallets, setSigner, connect, disconnect, drip, checkBalance, buy, pay, retry }
 }

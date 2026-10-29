@@ -203,6 +203,48 @@ test('concurrent visitor payments are attributed separately', async () => {
   } finally { await Promise.all(buyers.map(async b => await b.stop())); await swarm.stop() }
 })
 
+test('a visitor peer gets 2 concurrent paid streams; the 3rd is refused busy', async () => {
+  const { startBuyer } = await import('../src/buyer.ts')
+  const { FETCH_PROTOCOL } = await import('ipfs-x402')
+  const { readFrame, MAX_FRAME_BYTES } = await import('x402-libp2p')
+  const { lpStream } = await import('@libp2p/utils')
+  const { multiaddr } = await import('@multiformats/multiaddr')
+  const swarm = await startSwarm({ mode: 'mock' })
+  const buyer = await startBuyer()
+  try {
+    const conn = await buyer.libp2p.dial(multiaddr(swarm.visitorConfig().seller.addrs[0]))
+    // Each stream is left waiting for its payment, as a script holding them open would.
+    const first = async (): Promise<any> => await readFrame(lpStream(await conn.newStream(FETCH_PROTOCOL), { maxDataLength: MAX_FRAME_BYTES }), AbortSignal.timeout(10_000))
+    assert.equal((await first()).type, 'x402/payment-required')
+    assert.equal((await first()).type, 'x402/payment-required')
+    const third = await first()
+    assert.equal(third.type, 'x402/error')
+    assert.equal(third.code, 'busy')
+  } finally { await buyer.stop(); await swarm.stop() }
+})
+
+test('verified but unsettled payments stay bounded; a settled one leaves no tag', async () => {
+  const { PENDING_CAP, PENDING_TTL_MS, pendingTags, setPending, tagPayment } = await import('../src/payments.ts')
+  const m = new Map<string, { at: number, value: number }>()
+  for (let i = 0; i < 1100; i++) setPending(m, `k${i}`, i, 0)
+  assert.equal(m.size, PENDING_CAP)
+  assert.ok(!m.has('k0') && m.has('k1099'))
+  setPending(m, 'late', 1, PENDING_TTL_MS + 1)
+  assert.deepEqual([...m.keys()], ['late']) // everything older than the TTL is gone
+
+  const { startBuyer, buy } = await import('../src/buyer.ts')
+  const swarm = await startSwarm({ mode: 'mock' })
+  const buyer = await startBuyer()
+  try {
+    const n = pendingTags()
+    await buy(buyer, swarm.visitorConfig(), { kind: 'mock' }, {})
+    assert.equal(pendingTags(), n)
+  } finally { await buyer.stop(); await swarm.stop() }
+
+  for (let i = 0; i < 1100; i++) tagPayment({ payload: { sig: 'never', i } } as any, `x${i}`)
+  assert.ok(pendingTags() <= PENDING_CAP)
+})
+
 test('token endpoints refuse tunnel traffic even with the token', async () => {
   const swarm = await startSwarm({ mode: 'mock' })
   const { server, port } = await serve({ ...swarm, token: 't0ken' }, 0)

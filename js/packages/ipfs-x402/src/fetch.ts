@@ -6,7 +6,7 @@ import type { PaymentPayload, PaymentRequired, SettleResponse } from '@x402/core
 import type { HeliaWithLibp2p } from '@helia/libp2p'
 type Helia = HeliaWithLibp2p<any>
 import { CID } from 'multiformats/cid'
-import { X402Error, paid, payAndOpen, type GateHooks, type PayHooks } from 'x402-libp2p'
+import { X402Error, paid, payAndOpen, type GateHooks, type PaidOptions, type PayHooks } from 'x402-libp2p'
 import { exportCar, receiveCar, sendCar, verifyCar, type Block, type BlockCheck } from './car.ts'
 import { FETCH_PROTOCOL, memoFor, price, rateCard, type Pricing } from './pricing.ts'
 
@@ -26,7 +26,7 @@ export function parseRoot (value: unknown): CID {
  * Serve `/ipfs-x402/fetch/1.0.0`: request `{ root }`, priced `exact` on the CAR
  * size, memo the root as CIDv0 (see memoFor). Settles before streaming the CAR.
  */
-export function fetchHandler (helia: Helia, server: x402ResourceServer, pricing: Pricing, opts: { maxBytes: number, paymentTimeoutMs?: number }, hooks: FetchHooks = {}): StreamHandler {
+export function fetchHandler (helia: Helia, server: x402ResourceServer, pricing: Pricing, opts: { maxBytes: number, paymentTimeoutMs?: number, maxStreams?: PaidOptions['maxStreams'] }, hooks: FetchHooks = {}): StreamHandler {
   // Invoices are free to request, so never re-export a DAG per request: cache its size.
   // ponytail: unbounded per-root cache; fine for a node serving a known catalogue.
   const sizes = new Map<string, number>()
@@ -43,6 +43,7 @@ export function fetchHandler (helia: Helia, server: x402ResourceServer, pricing:
     resource: { url: `libp2p://${helia.libp2p.peerId}${FETCH_PROTOCOL}`, mimeType: 'application/vnd.ipld.car' },
     settle: 'before',
     paymentTimeoutMs: opts.paymentTimeoutMs,
+    maxStreams: opts.maxStreams,
     hooks: { onInvoice: hooks.onInvoice, onVerified: hooks.onVerified },
     invoice: async (request) => {
       const root = parseRoot(request.root)

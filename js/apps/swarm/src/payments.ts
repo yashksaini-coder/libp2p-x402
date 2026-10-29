@@ -20,21 +20,39 @@ export const DEVNET_WS = process.env.SOLANA_WS_URL ?? 'wss://api.devnet.solana.c
 /** Called with each transaction signature at the moment the facilitator submits it, with the payment it settles when tagged. */
 export type OnSubmit = (signature: string, submittedAt: number, paymentId?: string) => void
 
+/** Bounds for per-payment bookkeeping a peer can create without settling: oldest entries go first. */
+export const PENDING_CAP = 1000
+export const PENDING_TTL_MS = 10 * 60_000
+export type Pending<V> = Map<string, { at: number, value: V }>
+
+/** Set `key`, then drop entries beyond PENDING_CAP or older than PENDING_TTL_MS (a Map iterates oldest first). */
+export function setPending<V> (m: Pending<V>, key: string, value: V, now = Date.now()): void {
+  m.delete(key)
+  m.set(key, { at: now, value })
+  for (const [k, e] of m) {
+    if (m.size <= PENDING_CAP && now - e.at < PENDING_TTL_MS) break
+    m.delete(k)
+  }
+}
+
 // Per-payment attribution: two visitors can settle at once, so a global "current payment" would mix them up.
 // Identical payloads (mock) queue in tag order; settle follows verify in the gate, so the order holds.
-// ponytail: a tag whose payment never settles stays queued; fine while only failed scene 2 runs leave one.
-const tags = new Map<string, string[]>()
+// The tag is taken when settle starts, so a settled or failed payment leaves nothing; one never settled ages out.
+const tags: Pending<string[]> = new Map()
 const keyOf = (payload: PaymentPayload): string => JSON.stringify(payload.payload)
 
 /** Mark `payload` as payment `paymentId`; the settlement transaction it causes is reported under that id. */
 export function tagPayment (payload: PaymentPayload, paymentId: string): void {
   const key = keyOf(payload)
-  tags.set(key, [...(tags.get(key) ?? []), paymentId])
+  setPending(tags, key, [...(tags.get(key)?.value ?? []), paymentId])
 }
+
+/** Tags waiting for a settlement (tests). */
+export const pendingTags = (): number => tags.size
 
 function takeTag (payload: PaymentPayload): string | undefined {
   const key = keyOf(payload)
-  const queue = tags.get(key)
+  const queue = tags.get(key)?.value
   const id = queue?.shift()
   if (queue?.length === 0) tags.delete(key)
   return id

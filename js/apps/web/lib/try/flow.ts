@@ -11,7 +11,8 @@ export type Purchase = {
 export type FlowState = {
   step: Step, mode: 'mock' | 'devnet' | null,
   wallet?: { address: string, usdc: number },
-  drip?: { status: 'idle' | 'sending' | 'sent' | 'error', signature?: string, error?: string },
+  /** `late`: sent, but the balance had not shown up when polling stopped. */
+  drip?: { status: 'idle' | 'sending' | 'sent' | 'late' | 'error', signature?: string, error?: string },
   purchase?: Purchase, error?: { code: string, message: string },
 }
 export type FlowEvent =
@@ -21,6 +22,7 @@ export type FlowEvent =
   | { kind: 'balance', usdc: number }
   | { kind: 'drip-sending' }
   | { kind: 'drip-sent', signature: string }
+  | { kind: 'drip-late' }
   | { kind: 'drip-failed', code: string, message: string }
   | { kind: 'dialed', ms: number, seller: { peerId: string, payee: string } }
   | { kind: 'quote', amount: number, memo?: string, invoice?: unknown }
@@ -54,6 +56,7 @@ export function reduceFlow(s: FlowState, e: FlowEvent): FlowState {
     }
     case 'drip-sending': return { ...s, drip: { status: 'sending' } }
     case 'drip-sent': return { ...s, drip: { status: 'sent', signature: e.signature } }
+    case 'drip-late': return s.drip?.status === 'sent' ? { ...s, drip: { ...s.drip, status: 'late' } } : s
     case 'drip-failed': return { ...s, drip: { status: 'error', error: e.message } }
     case 'dialed': return { ...s, error: undefined, purchase: { seller: e.seller, dialMs: e.ms, blocks: [] } }
     case 'quote': return withP({ quote: { amount: e.amount, memo: e.memo } })
@@ -80,6 +83,10 @@ export function reduceFlow(s: FlowState, e: FlowEvent): FlowState {
       return whole ? { ...next, step: 'done' } : { ...next, error: { code: 'incomplete', message: 'The data arrived without every block verified. Buy again.' } }
     }
     case 'failed': return { ...s, error: { code: e.code, message: e.message } } // step stays; timeout lands here too
-    case 'retry': return { ...s, step: 'buy', purchase: undefined, error: undefined }
+    case 'retry': {
+      // Back to where the wallet stands now: a spent drip lands on fund, not on a purchase that cannot verify.
+      const step = !s.wallet ? 'connect' : s.wallet.usdc < PURCHASE_USDC ? 'fund' : 'buy'
+      return { ...s, step, purchase: undefined, error: undefined, drip: step === 'fund' ? { status: 'idle' } : s.drip }
+    }
   }
 }

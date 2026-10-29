@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useConnect, type UiWallet, type UiWalletAccount } from '@wallet-standard/react'
 import { ArrowUpRight } from '@phosphor-icons/react'
-import { TRY_URL, explorerTx } from '@/lib/config'
+import { LOCAL_HOSTS, TRY_URL, explorerTx } from '@/lib/config'
 import { E2E_WALLET, accountUsable } from '@/lib/try/wallet'
 import { walletBrowseLinks } from '@/lib/try/deeplinks'
 import { PURCHASE_USDC, type FlowState, type Step } from '@/lib/try/flow'
@@ -44,6 +44,9 @@ function Visitor() {
   const address = usable?.ok ? account!.address : undefined
   const p = state.purchase
   const [e2e] = useState(e2eFlags)
+  // On the booth laptop (the venue fallback) the wallet is the booth's demo wallet: say so, never pass it off as the visitor's.
+  const [booth, setBooth] = useState(false)
+  useEffect(() => setBooth(LOCAL_HOSTS.has(window.location.hostname)), [])
   const e2eWallet = e2e.e2e && !account ? v.wallets.find((w) => w.name === E2E_WALLET) : undefined
   // ?autobuy=1: drip as soon as the fund step shows; the buy then starts by itself (mock pays without a click).
   const { drip } = v
@@ -55,7 +58,7 @@ function Visitor() {
     <main id="main" className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-4 sm:py-8 lg:max-w-6xl">
       {e2eWallet && <E2EConnect wallet={e2eWallet} onAccount={v.connect} />}
       {account && usable?.ok && config?.mode === 'devnet' && <SignerBridge account={account} onSigner={v.setSigner} />}
-      <TopBar state={state} offline={v.offline} address={address} onDisconnect={v.disconnect} />
+      <TopBar state={state} offline={v.offline} address={address} booth={booth} onDisconnect={v.disconnect} />
       <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,32rem)_minmax(0,1fr)] lg:items-start lg:gap-10">
       <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-2 pt-4">
@@ -74,6 +77,7 @@ function Visitor() {
           v.offline ? 'The booth engine is not answering. Check your connection, then reload this page.'
             : usable?.ok === false && usable.reason === 'not_devnet' ? 'Your wallet is not on devnet. Switch it to devnet, then connect again.'
             : usable?.ok === false ? 'This wallet cannot sign a transaction for the booth to submit. Connect Phantom, Solflare or Backpack instead.'
+            : address && booth ? <>Booth wallet <Mono>{short(address, 4, 4)}</Mono> connected. This is the booth&apos;s demo wallet, not yours.</>
             : address ? <>Connected <Mono>{short(address, 4, 4)}</Mono>.</>
             : 'Pick the wallet you want to pay with. Your key stays in your wallet.'
         }
@@ -93,7 +97,10 @@ function Visitor() {
         sentence={fundSentence(state, config)}
         hood="POST /visitor/drip. One transaction creates your USDC account if it is missing, then transferChecked sends 10,000 atomic USDC (6 decimals). The booth's fee payer signs and pays."
       >
-        {state.step === 'fund' && state.drip?.status !== 'sent' && (
+        {state.step === 'fund' && state.drip?.status === 'late' && (
+          <button type="button" className={primary} onClick={v.checkBalance}>Check balance again</button>
+        )}
+        {state.step === 'fund' && state.drip?.status !== 'sent' && state.drip?.status !== 'late' && (
           <button type="button" className={primary} disabled={state.drip?.status === 'sending' || config?.drip.enabled === false} onClick={v.drip}>
             {state.drip?.status === 'sending' ? 'Sending' : state.drip?.status === 'error' ? 'Try again' : 'Get test USDC'}
           </button>
@@ -156,6 +163,7 @@ function fundSentence(s: FlowState, config?: VisitorConfig): React.ReactNode {
   if (s.step === 'connect') return 'Test money from the booth, once per wallet.'
   if (d?.status === 'sent') return s.mode === 'mock' ? 'MOCK: no USDC sent. Mock payments need none.' : <>Sent. Your balance is <Mono>{(s.wallet?.usdc ?? 0).toFixed(4)}</Mono> USDC.</>
   if (s.step !== 'fund') return 'Your wallet already holds enough test USDC for a purchase.'
+  if (d?.status === 'late') return <>Sent, but devnet has not shown it yet: your balance reads <Mono>{(s.wallet?.usdc ?? 0).toFixed(4)}</Mono> USDC. Wait a minute, then check your balance again.</>
   if (d?.status === 'sending') return 'Sending 0.01 test USDC to your wallet.'
   if (d?.status === 'error') return `${d.error} Devnet USDC is also free at faucet.circle.com.`
   if (config?.drip.enabled === false) return 'The booth has paused test USDC. Ask at the booth, or get devnet USDC at faucet.circle.com.'

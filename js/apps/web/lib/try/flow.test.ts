@@ -55,3 +55,19 @@ test('mock mode never enters signing', () => {
   const s = run({ kind: 'config', mode: 'mock' }, { kind: 'wallet-connected', address: 'A', usdc: 1 }, ...buyStart, { kind: 'signing', at: 1 })
   assert.equal(s.purchase?.signing, undefined)
 })
+
+test('retry with the drip spent lands on fund, ready to ask again', () => {
+  let s = run({ kind: 'wallet-connected', address: 'A', usdc: 0 }, { kind: 'drip-sending' }, { kind: 'drip-sent', signature: 'sig' }, { kind: 'balance', usdc: 0.01 }, ...buyStart)
+  assert.equal(s.step, 'buy')
+  s = [{ kind: 'balance', usdc: 0.001 }, { kind: 'failed', code: 'insufficient_funds', message: 'x' }, { kind: 'retry' }].reduce((x, e) => reduceFlow(x, e as FlowEvent), s)
+  assert.equal(s.step, 'fund')
+  assert.equal(s.drip?.status, 'idle')
+  assert.equal(run({ kind: 'retry' }).step, 'connect')
+})
+
+test('a drip that outlasts polling turns late and keeps its signature', () => {
+  const s = run({ kind: 'wallet-connected', address: 'A', usdc: 0 }, { kind: 'drip-sending' }, { kind: 'drip-sent', signature: 'sig' }, { kind: 'drip-late' })
+  assert.deepEqual(s.drip, { status: 'late', signature: 'sig' })
+  assert.equal(s.step, 'fund')
+  assert.equal(reduceFlow(s, { kind: 'balance', usdc: 0.01 }).step, 'buy')
+})

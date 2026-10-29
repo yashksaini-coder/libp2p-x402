@@ -12,4 +12,7 @@ export const SWARM_TOKEN = process.env.NEXT_PUBLIC_SWARM_TOKEN ?? ''
 /** Public origin of the /try page, for wallet deeplinks. */
 export const TRY_URL = (process.env.NEXT_PUBLIC_TRY_URL ?? 'http://localhost:3000/try').replace(/\/$/, '')
 
+/** Hostnames of the booth laptop: presenter controls render there, and a wallet there is the booth's, not a visitor's. */
+export const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
+
 export const explorerTx = (sig: string) => `https://explorer.solana.com/tx/${sig}?cluster=devnet`

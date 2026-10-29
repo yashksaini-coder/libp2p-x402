@@ -14,13 +14,17 @@ import { localOnlyRouting } from 'ipfs-x402'
 
 export type Node = HeliaWithLibp2p<any>
 
+/** The public ws seller's connection caps. inboundConnectionThreshold is per host per second, and every visitor is 127.0.0.1. */
+export const WS_LIMITS = { maxConnections: 200, maxIncomingPendingConnections: 32, inboundConnectionThreshold: 30 }
+
 export { addContent, dataset } from './shared.ts'
 
 /**
  * A Helia node on loopback TCP whose PeerId is `privateKey` (= its Solana wallet). No discovery.
  * `dialsTabs`: can also reach a browser tab: WebSockets to the relay, /p2p-circuit, then a WebRTC upgrade.
  * `wsPort`: also listens on loopback WebSockets (visitors arrive through a tunnel), advertising `announce` too.
- * Every tunnelled visitor comes from loopback, so loopback is exempt from connection limits.
+ * Every tunnelled visitor comes from loopback, so per host limits act as global ones: no allow list
+ * (it would bypass every cap), explicit caps sized for one booth instead.
  */
 export async function heliaNode (privateKey: PrivateKey, opts: { dialsTabs?: boolean, wsPort?: number, announce?: string[] } = {}): Promise<Node> {
   const ws = opts.wsPort != null
@@ -30,7 +34,7 @@ export async function heliaNode (privateKey: PrivateKey, opts: { dialsTabs?: boo
       privateKey,
       // appendAnnounce, not announce: announce would replace the loopback addresses the agent dials in scene 1.
       addresses: { listen: ['/ip4/127.0.0.1/tcp/0', ...(ws ? [`/ip4/127.0.0.1/tcp/${opts.wsPort}/ws`] : [])], appendAnnounce: opts.announce ?? [] },
-      ...(ws ? { connectionManager: { allow: ['/ip4/127.0.0.1/ipcidr/32'] } } : {}),
+      ...(ws ? { connectionManager: WS_LIMITS } : {}),
       transports,
       connectionEncrypters: [noise()],
       streamMuxers: [yamux()],

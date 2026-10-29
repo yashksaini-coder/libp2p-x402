@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { SWARM_TOKEN, SWARM_URL } from '@/lib/config'
+import { LOCAL_HOSTS, SWARM_TOKEN, SWARM_URL } from '@/lib/config'
 import { cx } from '@/components/ui'
 
 const SCENES = [
@@ -10,8 +10,6 @@ const SCENES = [
   { n: 3, title: 'Pay to keep it' },
 ] as const
 
-const LOCAL = new Set(['localhost', '127.0.0.1', '[::1]'])
-
 /** Presenter controls. Rendered only when /live is served from localhost; keys 1, 2, 3 trigger the same POST. */
 /** `tabLive`: a browser tab holds a relay slot, so scene 1 really buys from it. Only then does the label say so. */
 export function SceneControls({ running, tabLive }: { running?: number, tabLive?: boolean }) {
@@ -19,7 +17,7 @@ export function SceneControls({ running, tabLive }: { running?: number, tabLive?
   const [msg, setMsg] = useState<string>()
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => setLocal(LOCAL.has(window.location.hostname)), [])
+  useEffect(() => setLocal(LOCAL_HOSTS.has(window.location.hostname)), [])
 
   const start = useCallback(async (n: number) => {
     setBusy(true)

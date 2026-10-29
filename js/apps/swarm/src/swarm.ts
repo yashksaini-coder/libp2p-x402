@@ -14,7 +14,7 @@ import { startKubo, type Kubo } from './kubo.ts'
 import { addContent, carBytes, checkpoint, dataset, heliaNode, tamper, type Node } from './nodes.ts'
 import { startRelay } from './relay.ts'
 import type { SellConfig, VisitorConfig } from './shared.ts'
-import { devnetPayments, mockPayments, tagPayment, type Payments } from './payments.ts'
+import { devnetPayments, mockPayments, setPending, tagPayment, type Payments, type Pending } from './payments.ts'
 import { watchDevnet, watchMock } from './txwatch.ts'
 
 export interface SwarmOptions {
@@ -51,6 +51,8 @@ export interface Swarm {
 export class SceneBusy extends Error {}
 
 const MAX_BYTES = 8 * 1024 * 1024
+/** Each paid stream may wait 120 s for its payment: bound how many one peer, and everyone, can hold open. */
+export const VISITOR_STREAMS = { perPeer: 2, total: 32 }
 const TAB_TITLE = 'An agent buys a dataset from a browser tab'
 const TITLES = { 1: 'An agent buys a dataset from a peer', 2: 'A tampered upload is rejected before payment', 3: 'Pay a peer to keep it, then a stock IPFS node fetches it' } as const
 
@@ -103,14 +105,15 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
   bus.emit({ kind: 'peer', id: id(relay), role: 'relay', label: 'Relay', addrs: [relay.addr] })
 
   // Visitors buy from the seller too (over WebSockets): the seller's own hooks report them, each payment under its own id.
-  // ponytail: never pruned (identical mock payloads may verify concurrently); one short entry per purchase.
-  const payers = new Map<string, string>()
+  // Read (and removed) in onVerified right after; capped for verifies that never get there.
+  const payers: Pending<string> = new Map()
   const visitorSellerServer = async (): Promise<Awaited<ReturnType<Payments['server']>>> => {
     const server = await payments.server()
     // The gate's hook gets the payload, not the facilitator's answer: keep the payer it verified.
-    return server.onAfterVerify(async ({ paymentPayload, result }) => { if (result.payer != null) payers.set(JSON.stringify(paymentPayload.payload), result.payer) })
+    return server.onAfterVerify(async ({ paymentPayload, result }) => { if (result.payer != null) setPending(payers, JSON.stringify(paymentPayload.payload), result.payer) })
   }
-  const visitors = new Set<string>()
+  // Visitors already announced; one evicted is simply announced again.
+  const visitors: Pending<true> = new Map()
   let visitSeq = 0
   const fromVisitor = (peer: PeerId): boolean => !peer.equals(agent.libp2p.peerId)
   const visitorHooks: FetchHooks = {
@@ -120,11 +123,13 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
       bus.emit({ kind: 'quote', from: id(seller), to: peer.toString(), protocol: FETCH_PROTOCOL, amount: r.amount, asset: r.asset, memo: r.extra?.memo as string | undefined, invoice: true })
     },
     onVerified: ({ payment, requirements: r, peer }) => {
+      const key = JSON.stringify(payment.payload)
+      const payer = payers.get(key)?.value ?? ''
+      payers.delete(key) // the agent's too: onAfterVerify recorded every payer
       if (!fromVisitor(peer)) return
-      const payer = payers.get(JSON.stringify(payment.payload)) ?? ''
       const from = peer.toString()
       if (!visitors.has(from)) {
-        visitors.add(from)
+        setPending(visitors, from, true)
         bus.emit({ kind: 'peer', id: from, role: 'visitor', label: `Visitor ${payer.slice(0, 4)}…${payer.slice(-4)}`, addrs: [], payee: payer })
       }
       const paymentId = `visit-${++visitSeq}`
@@ -136,7 +141,7 @@ export async function startSwarm (opts: SwarmOptions): Promise<Swarm> {
   // Seller sells a dataset over paid fetch; provider sells pinning.
   const datasetRoot = await addContent(seller, dataset())
   const checkpointRoot = await addContent(agent, checkpoint())
-  await seller.libp2p.handle(FETCH_PROTOCOL, fetchHandler(seller, await visitorSellerServer(), payments.pricing(payeeFromPeerId(seller.libp2p.peerId)!), { maxBytes: MAX_BYTES, paymentTimeoutMs: 120_000 }, visitorHooks))
+  await seller.libp2p.handle(FETCH_PROTOCOL, fetchHandler(seller, await visitorSellerServer(), payments.pricing(payeeFromPeerId(seller.libp2p.peerId)!), { maxBytes: MAX_BYTES, paymentTimeoutMs: 120_000, maxStreams: VISITOR_STREAMS }, visitorHooks))
   await provider.libp2p.handle(PIN_PROTOCOL, pinHandler(provider, await payments.server(), payments.pricing(payeeFromPeerId(provider.libp2p.peerId)!), { maxBytes: MAX_BYTES, durationDays: 30 }, {
     onBlock: b => bus.emit({ kind: 'block', requestId: currentPayment, cid: b.cid.toString(), index: b.index, total: b.total, ok: b.ok }),
     onPinned: p => bus.emit({ kind: 'pinned', root: p.root.toString(), provider: id(provider), receiptCid: p.receipt.toString(), expiresAt: p.receiptBody.expiresAt, receipt: p.receiptBody })

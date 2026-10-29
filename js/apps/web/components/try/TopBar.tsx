@@ -9,7 +9,7 @@ import { Mono, cx, short } from '@/components/ui'
 const explorerAddress = (a: string) => `https://explorer.solana.com/address/${a}?cluster=devnet`
 const item = 'flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm transition-colors duration-300 ease-out hover:bg-hover'
 
-export function TopBar({ state, offline, address, onDisconnect }: { state: FlowState, offline: boolean, address?: string, onDisconnect: () => void }) {
+export function TopBar({ state, offline, address, booth, onDisconnect }: { state: FlowState, offline: boolean, address?: string, booth?: boolean, onDisconnect: () => void }) {
   const [copied, setCopied] = useState(false)
   const badge = offline ? 'OFFLINE' : state.mode === 'devnet' ? 'DEVNET' : state.mode === 'mock' ? 'MOCK' : 'CONNECTING'
   const copy = async () => {
@@ -35,6 +35,7 @@ export function TopBar({ state, offline, address, onDisconnect }: { state: FlowS
       {address && (
         <details className="relative">
           <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 whitespace-nowrap rounded-full border border-line bg-raised px-3 text-sm transition-colors duration-300 ease-out hover:bg-hover [&::-webkit-details-marker]:hidden">
+            {booth && <span className="font-semibold">Booth wallet</span>}
             <Mono>{short(address, 4, 4)}</Mono>
             <Mono className="text-muted">{state.mode === 'mock' ? 'MOCK' : <>{(state.wallet?.usdc ?? 0).toFixed(4)}<span className="hidden sm:inline"> USDC</span></>}</Mono>
             <CaretDown size={14} aria-hidden />

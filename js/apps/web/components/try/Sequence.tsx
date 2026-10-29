@@ -75,12 +75,12 @@ const dot = (s: RowState, tone?: 'settled') =>
 
 function Lanes({ list, st, reduce }: { list: Row[], st: RowState[], reduce: boolean }) {
   return (
-    <div className="relative hidden lg:block" role="img" aria-label="Sequence of the purchase across You, Seller peer, Facilitator and Solana devnet">
-      <div className="grid grid-cols-4 pb-3 text-center text-sm font-semibold">
+    <div className="relative hidden lg:block">
+      <div className="grid grid-cols-4 pb-3 text-center text-sm font-semibold" aria-hidden>
         {LANES.map((l) => <span key={l}>{l}</span>)}
       </div>
       {LANES.map((l, i) => <span key={l} aria-hidden className="absolute bottom-0 top-8 w-px bg-line" style={{ left: center(i as Lane) }} />)}
-      <ol className="relative flex flex-col">
+      <ol className="relative flex flex-col" aria-label="Sequence of the purchase across You, Seller peer, Facilitator and Solana devnet">
         {list.map((r, i) => <LaneRow key={r.key} r={r} s={st[i]} reduce={reduce} />)}
       </ol>
     </div>
@@ -94,6 +94,7 @@ function LaneRow({ r, s, reduce }: { r: Row, s: RowState, reduce: boolean }) {
   const text = cx('whitespace-nowrap text-sm', s === 'waiting' ? 'text-muted' : s === 'error' ? 'text-rejected' : 'text-white')
   return (
     <li className={cx('relative h-14 rounded-lg transition-colors duration-300 ease-out', s === 'active' && 'bg-raised')}>
+      <span className="sr-only">{self ? LANES[r.from] : `${LANES[r.from]} to ${LANES[r.to]}`}: </span>
       {self ? (
         <>
           <span className={cx('absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors duration-300 ease-out', dot(s, r.tone))} style={{ left: center(r.from) }} aria-hidden />

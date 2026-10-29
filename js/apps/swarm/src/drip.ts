@@ -80,10 +80,13 @@ export function createDrip (opts: DripOptions): Drip {
       // Submitted but not confirmed: it may still land, so keep the address (and its stamps) claimed.
       if (isAmbiguous(err)) {
         save(address)
-        return refuse('send_failed', `The drip transaction may still land (${String(err?.message ?? err)}). Check your wallet in a minute before asking again.`)
+        console.error(`drip to ${address} unconfirmed: ${String(err?.message ?? err)}`)
+        return refuse('send_failed', 'The drip transaction was sent but not confirmed yet, so it may still land. Check your wallet in a minute before asking again.')
       }
       release()
-      return refuse('send_failed', `The drip transaction failed (${String(err?.message ?? err)}). Try again in a minute.`)
+      // The raw RPC error stays in the booth log: visitors get fixed copy.
+      console.error(`drip to ${address} failed: ${String(err?.message ?? err)}`)
+      return refuse('send_failed', 'The drip transaction failed. Try again in a minute.')
     }
   }
 
