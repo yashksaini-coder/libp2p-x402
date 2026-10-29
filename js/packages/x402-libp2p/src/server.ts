@@ -4,6 +4,12 @@ import type { x402ResourceServer } from '@x402/core/server'
 import type { PaymentPayload, PaymentRequired, PaymentRequirements, ResourceInfo, SettleResponse } from '@x402/core/types'
 import { MAX_FRAME_BYTES, X402Error, readFrame, writeFrame } from './frames.ts'
 
+/** Observation points for the seller. Errors thrown by a hook are swallowed: they never reach the gate. */
+export interface GateHooks {
+  onInvoice?: (r: { accepts: PaymentRequirements[], peer: PeerId }) => void
+  onVerified?: (r: { payment: PaymentPayload, requirements: PaymentRequirements, peer: PeerId }) => void
+}
+
 export interface PaidOptions {
   /** The rate card: sent as the first frame on every stream. */
   accepts: PaymentRequirements[]
@@ -23,6 +29,10 @@ export interface PaidOptions {
   paymentTimeoutMs?: number
   /** Bound on each gate write/close toward the peer, so a peer that stops reading cannot stall the server. Default 10s. */
   ioTimeoutMs?: number
+  /** Concurrent streams this gate serves, per remote peer and in total; beyond either it answers x402/error `busy`. Default unlimited.
+   * `exempt` peers (e.g. the operator's own buyer) are never refused, so free PeerIds cannot crowd them out. */
+  maxStreams?: { perPeer: number, total: number, exempt?: (peer: PeerId) => boolean }
+  hooks?: GateHooks
 }
 
 export interface PaidContext {
@@ -67,8 +77,13 @@ export function paid (server: x402ResourceServer, opts: PaidOptions, handler: (c
   const timeout = (): AbortSignal => AbortSignal.timeout(opts.paymentTimeoutMs ?? 30_000)
   const io = (): AbortSignal => AbortSignal.timeout(opts.ioTimeoutMs ?? 10_000)
 
+  const notify = (call: (() => void) | undefined): void => { try { call?.() } catch {} }
+  const open = new Map<string, number>()
+  let total = 0
+
   return async (stream, connection) => {
     const lp = lpStream(stream, { maxDataLength: MAX_FRAME_BYTES })
+    const peer = connection.remotePeer.toString()
     let reported = false
     const fail = async (code: string, message?: string, paymentRequired?: PaymentRequired): Promise<void> => {
       await writeFrame(lp, { type: 'x402/error', code, message, paymentRequired }, io())
@@ -76,7 +91,12 @@ export function paid (server: x402ResourceServer, opts: PaidOptions, handler: (c
       reported = true // only once the peer has it; if either step threw, the catch resets the stream
     }
 
+    const cap = opts.maxStreams
+    const mine = open.get(peer) ?? 0
+    const busy = cap != null && cap.exempt?.(connection.remotePeer) !== true && (mine >= cap.perPeer || total >= cap.total)
+    if (!busy) { open.set(peer, mine + 1); total++ }
     try {
+      if (busy) return await fail('busy', 'too many open payment streams; finish one, then try again')
       // Server speaks first: the rate card is both the challenge and the free quote.
       let paymentRequired = await server.createPaymentRequiredResponse(await enhance(server, opts.accepts), opts.resource)
       await writeFrame(lp, { type: 'x402/payment-required', paymentRequired })
@@ -95,6 +115,7 @@ export function paid (server: x402ResourceServer, opts: PaidOptions, handler: (c
         // A later payment-required supersedes the rate card.
         paymentRequired = await server.createPaymentRequiredResponse(await enhance(server, accepts), opts.resource)
         await writeFrame(lp, { type: 'x402/payment-required', paymentRequired })
+        notify(() => opts.hooks?.onInvoice?.({ accepts: paymentRequired.accepts, peer: connection.remotePeer }))
         frame = await readFrame(lp, timeout())
       }
       if (frame.type !== 'x402/payment') return await fail('invalid_frame', `expected x402/payment, got ${frame.type}`)
@@ -105,6 +126,8 @@ export function paid (server: x402ResourceServer, opts: PaidOptions, handler: (c
 
       const verified = await server.verifyPayment(payment, requirements)
       if (!verified.isValid) return await fail(verified.invalidReason ?? 'invalid_payment', verified.invalidMessage, paymentRequired)
+
+      notify(() => opts.hooks?.onVerified?.({ payment, requirements, peer: connection.remotePeer }))
 
       let settled: Promise<SettleResponse> | undefined
       const settle = async (): Promise<SettleResponse> => {
@@ -129,6 +152,13 @@ export function paid (server: x402ResourceServer, opts: PaidOptions, handler: (c
     } catch (err) {
       if (reported) return // the peer already has an x402/error frame and the stream is closed
       stream.abort(err as Error) // garbage frame, timeout, handler bug: reset, never leave it open
+    } finally {
+      if (!busy) {
+        total--
+        const left = (open.get(peer) ?? 1) - 1
+        if (left > 0) open.set(peer, left)
+        else open.delete(peer)
+      }
     }
   }
 }

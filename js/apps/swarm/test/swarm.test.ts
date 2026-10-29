@@ -1,8 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createRequire } from 'node:module'
 import type { SwarmEvent } from '../src/events.ts'
 import { serve } from '../src/http.ts'
 import { startSwarm } from '../src/swarm.ts'
@@ -145,4 +146,151 @@ test('a peer that serves fetch on the relay without registering is not treated a
     assert.ok(!swarm.bus.events().some(e => e.kind === 'peer' && e.label === 'Browser tab'), 'unregistered peer accepted as a tab')
     await tab.stop()
   } finally { server.close(); await swarm.stop() }
+})
+
+test('visitor config advertises the seller over ws', async () => {
+  const { payeeFromPeerId } = await import('x402-libp2p')
+  const { peerIdFromString } = await import('@libp2p/peer-id')
+  const swarm = await startSwarm({ mode: 'mock' })
+  const { server, port } = await serve({ ...swarm, token: 't0ken' }, 0)
+  try {
+    const config = await (await fetch(`http://127.0.0.1:${port}/visitor/config`)).json()
+    assert.match(config.seller.addrs[0], /\/ws\/p2p\/12D3KooW/)
+    assert.equal(config.seller.payee, payeeFromPeerId(peerIdFromString(config.seller.peerId)))
+    const seller = swarm.bus.events().find(e => e.kind === 'peer' && e.role === 'seller')
+    assert.equal(config.seller.peerId, seller?.kind === 'peer' && seller.id)
+    assert.equal(config.root, swarm.sellConfig().root) // the dataset root
+    assert.equal(config.drip.amount, '10000')
+  } finally { server.close(); await swarm.stop() }
+})
+
+test('a buyer pays the seller over ws and gets the dataset (mock)', async () => {
+  const { startBuyer, buy } = await import('../src/buyer.ts')
+  const { dataset } = await import('../src/shared.ts')
+  const swarm = await startSwarm({ mode: 'mock' })
+  const buyer = await startBuyer()
+  try {
+    const checks: boolean[] = []
+    const payee: boolean[] = []
+    const got = await buy(buyer, swarm.visitorConfig(), { kind: 'mock' }, { onBlock: b => checks.push(b.ok), pay: { onPayeeCheck: c => payee.push(c.ok) } })
+    assert.deepEqual(got.data, dataset())
+    assert.ok(checks.length > 10 && checks.every(Boolean))
+    assert.deepEqual(payee, [true])
+    await settle(200)
+    assert.ok(swarm.bus.events().some(e => e.kind === 'payment' && e.id.startsWith('visit-1')))
+  } finally { await buyer.stop(); await swarm.stop() }
+})
+
+test('concurrent visitor payments are attributed separately', async () => {
+  const { startBuyer, buy } = await import('../src/buyer.ts')
+  const swarm = await startSwarm({ mode: 'mock' })
+  const config = swarm.visitorConfig()
+  const buyers = await Promise.all([startBuyer(), startBuyer()])
+  try {
+    await Promise.all(buyers.map(async b => await buy(b, config, { kind: 'mock' }, {})))
+    await settle(200)
+    const ev = swarm.bus.events()
+    const payments = ev.filter(e => e.kind === 'payment' && e.id.startsWith('visit-'))
+    assert.equal(payments.length, 2)
+    assert.notEqual(payments[0].kind === 'payment' && payments[0].id, payments[1].kind === 'payment' && payments[1].id)
+    for (const p of payments) {
+      assert.ok(p.kind === 'payment')
+      assert.equal(ev.filter(e => e.kind === 'tx' && e.status === 'submitted' && e.paymentId === p.id).length, 1, `no submitted tx for ${p.id}`)
+    }
+    const visitors = ev.filter(e => e.kind === 'peer' && e.role === 'visitor')
+    assert.deepEqual(visitors.map(v => v.kind === 'peer' && v.id).sort(), buyers.map(b => b.libp2p.peerId.toString()).sort())
+    assert.ok(ev.some(e => e.kind === 'quote' && e.invoice && e.to === buyers[0].libp2p.peerId.toString()))
+  } finally { await Promise.all(buyers.map(async b => await b.stop())); await swarm.stop() }
+})
+
+test('the public seller speaks only paid fetch, not bitswap', async () => {
+  const { startBuyer } = await import('../src/buyer.ts')
+  const { FETCH_PROTOCOL } = await import('ipfs-x402')
+  const { multiaddr } = await import('@multiformats/multiaddr')
+  const { peerIdFromString } = await import('@libp2p/peer-id')
+  const swarm = await startSwarm({ mode: 'mock' })
+  const buyer = await startBuyer()
+  try {
+    const config = swarm.visitorConfig()
+    await buyer.libp2p.dial(multiaddr(config.seller.addrs[0]))
+    let protocols: string[] = []
+    for (let i = 0; i < 50 && !protocols.includes(FETCH_PROTOCOL); i++) {
+      protocols = (await buyer.libp2p.peerStore.get(peerIdFromString(config.seller.peerId)).catch(() => ({ protocols: [] }))).protocols
+      await settle(50)
+    }
+    assert.ok(protocols.includes(FETCH_PROTOCOL), 'identify finished')
+    assert.deepEqual(protocols.filter(p => p.startsWith('/ipfs/bitswap')), []) // bitswap would hand out the paid dataset for free
+  } finally { await buyer.stop(); await swarm.stop() }
+})
+
+test('a visitor peer gets 2 concurrent paid streams; the 3rd is refused busy', async () => {
+  const { startBuyer } = await import('../src/buyer.ts')
+  const { FETCH_PROTOCOL } = await import('ipfs-x402')
+  const { readFrame, MAX_FRAME_BYTES } = await import('x402-libp2p')
+  const { lpStream } = await import('@libp2p/utils')
+  const { multiaddr } = await import('@multiformats/multiaddr')
+  const swarm = await startSwarm({ mode: 'mock' })
+  const buyer = await startBuyer()
+  try {
+    const conn = await buyer.libp2p.dial(multiaddr(swarm.visitorConfig().seller.addrs[0]))
+    // Each stream is left waiting for its payment, as a script holding them open would.
+    const first = async (): Promise<any> => await readFrame(lpStream(await conn.newStream(FETCH_PROTOCOL), { maxDataLength: MAX_FRAME_BYTES }), AbortSignal.timeout(10_000))
+    assert.equal((await first()).type, 'x402/payment-required')
+    assert.equal((await first()).type, 'x402/payment-required')
+    const third = await first()
+    assert.equal(third.type, 'x402/error')
+    assert.equal(third.code, 'busy')
+  } finally { await buyer.stop(); await swarm.stop() }
+})
+
+test('verified but unsettled payments stay bounded; a settled one leaves no tag', async () => {
+  const { PENDING_CAP, PENDING_TTL_MS, pendingTags, setPending, tagPayment } = await import('../src/payments.ts')
+  const m = new Map<string, { at: number, value: number }>()
+  for (let i = 0; i < 1100; i++) setPending(m, `k${i}`, i, 0)
+  assert.equal(m.size, PENDING_CAP)
+  assert.ok(!m.has('k0') && m.has('k1099'))
+  setPending(m, 'late', 1, PENDING_TTL_MS + 1)
+  assert.deepEqual([...m.keys()], ['late']) // everything older than the TTL is gone
+
+  const { startBuyer, buy } = await import('../src/buyer.ts')
+  const swarm = await startSwarm({ mode: 'mock' })
+  const buyer = await startBuyer()
+  try {
+    const n = pendingTags()
+    await buy(buyer, swarm.visitorConfig(), { kind: 'mock' }, {})
+    assert.equal(pendingTags(), n)
+  } finally { await buyer.stop(); await swarm.stop() }
+
+  for (let i = 0; i < 1100; i++) tagPayment({ payload: { sig: 'never', i } } as any, `x${i}`)
+  assert.ok(pendingTags() <= PENDING_CAP)
+})
+
+test('token endpoints refuse tunnel traffic even with the token', async () => {
+  const swarm = await startSwarm({ mode: 'mock' })
+  const { server, port } = await serve({ ...swarm, token: 't0ken' }, 0)
+  try {
+    const post = async (path: string, tunnel: boolean): Promise<number> =>
+      (await fetch(`http://127.0.0.1:${port}${path}`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer t0ken', 'Content-Type': 'application/json', ...(tunnel ? { 'CF-Connecting-IP': '203.0.113.9' } : {}) },
+        body: JSON.stringify({ paused: true })
+      })).status
+    for (const path of ['/scenes/1', '/sell/register', '/facilitator/verify', '/visitor/pause']) {
+      assert.equal(await post(path, true), 403, path)
+    }
+    assert.equal(await post('/scenes/1', false), 202)
+    while (swarm.busy()) await settle(50)
+  } finally { server.close(); await swarm.stop() }
+})
+
+test('x402 svm resolves @solana/keys below 8.5.0', () => {
+  const svm = createRequire(import.meta.url).resolve('@x402/svm')
+  // @x402/svm imports verifySignature from @solana/kit, so follow that chain: svm -> kit -> keys.
+  // (Resolving keys straight from svm would hit the hoisted 8.5.0 that only swarm's own kit uses.)
+  // The package's exports map hides package.json, so find the package root from the resolved entry.
+  const entry = createRequire(createRequire(svm).resolve('@solana/kit')).resolve('@solana/keys')
+  const { version } = JSON.parse(readFileSync(join(entry.slice(0, entry.lastIndexOf('@solana/keys') + '@solana/keys'.length), 'package.json'), 'utf8'))
+  const [major, minor] = version.split('.').map(Number)
+  assert.ok(major < 8 || (major === 8 && minor < 5),
+    `@x402/svm resolves @solana/keys ${version} via @solana/kit; 8.5.0+ breaks exact payments (see the upstream issue draft in ~/oss_contribution_logs/drafts). Run npm ls @solana/keys from js/.`)
 })

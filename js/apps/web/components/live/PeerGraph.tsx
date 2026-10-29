@@ -14,12 +14,16 @@ const SLOTS: Record<string, Array<[number, number]>> = {
   seller: [[840, 70], [500, 100]], // the data seller, then a browser tab (reached via the relay below it)
   provider: [[840, 220]],
   kubo: [[840, 420]],
+  visitor: [[160, 470], [330, 470], [500, 470]], // the newest three; older visitors leave the graph but stay in the feed
 }
 
 function layout(peers: Record<string, PeerNode>) {
+  const visitors = Object.values(peers).filter((p) => p.role === 'visitor')
+  const dropped = new Set(visitors.slice(0, Math.max(0, visitors.length - SLOTS.visitor.length)).map((p) => p.id))
   const used: Record<string, number> = {}
   const pos: Record<string, [number, number]> = {}
   for (const p of Object.values(peers)) {
+    if (dropped.has(p.id)) continue
     const slots = SLOTS[p.role] ?? SLOTS.agent
     const i = used[p.role] = (used[p.role] ?? -1) + 1
     pos[p.id] = slots[i] ?? [500, 250 + 40 * i]
@@ -35,7 +39,7 @@ export function PeerGraph({ state, highlight, selected, onSelect }: {
 }) {
   const pos = layout(state.peers)
   const relay = Object.values(state.peers).find((p) => p.role === 'relay')
-  const peers = Object.values(state.peers)
+  const peers = Object.values(state.peers).filter((p) => pos[p.id])
 
   return (
     <Panel className="relative col-span-8 flex min-h-0 flex-col overflow-hidden bg-stage" aria-label="Peer graph">

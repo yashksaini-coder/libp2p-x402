@@ -13,6 +13,7 @@ const { values, positionals } = parseArgs({
     mode: { type: 'string', default: 'mock' },
     port: { type: 'string', default: '4402' },
     'relay-port': { type: 'string', default: '4403' },
+    'seller-ws-port': { type: 'string', default: '4404' },
     keys: { type: 'string', default: '.keys' },
     record: { type: 'string' },
     replay: { type: 'string' },
@@ -63,7 +64,7 @@ if (mode !== 'mock' && mode !== 'devnet') { console.error('--mode must be mock o
 
 let swarm
 try {
-  swarm = await startSwarm({ mode, keysDir: values.keys, kubo: !values['no-kubo'], recordTo: values.record, relayPort: Number(values['relay-port']) })
+  swarm = await startSwarm({ mode, keysDir: values.keys, kubo: !values['no-kubo'], recordTo: values.record, relayPort: Number(values['relay-port']), sellerWsPort: Number(values['seller-ws-port']), sellerPublicAddr: process.env.SELLER_HOST != null ? `/dns4/${process.env.SELLER_HOST}/tcp/443/tls/ws` : undefined })
 } catch (err: any) {
   console.error(`swarm failed to start: ${err?.message ?? err}`)
   process.exit(1)

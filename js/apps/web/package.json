@@ -6,16 +6,25 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test lib/reduce.test.ts",
-    "e2e:sell": "node scripts/sell-e2e.ts"
+    "build:public": "NEXT_DIST_DIR=.next-public NEXT_PUBLIC_SWARM_TOKEN= NEXT_PUBLIC_SWARM_URL=https://${TRY_HOST:?set TRY_HOST, e.g. try.example.com} NEXT_PUBLIC_TRY_URL=https://${TRY_HOST}/try next build",
+    "start:public": "NEXT_DIST_DIR=.next-public next start",
+    "build:presenter": "NEXT_DIST_DIR=.next-presenter next build",
+    "test": "node --test --test-timeout=60000 lib/reduce.test.ts lib/try/wallet.test.ts lib/try/flow.test.ts",
+    "e2e:sell": "node scripts/sell-e2e.ts",
+    "e2e:try": "node scripts/try-e2e.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
+    "@solana/kit": "8.5.0",
+    "@solana/react": "8.5.0",
+    "@tanstack/react-query": "5.103.1",
+    "@wallet-standard/react": "1.0.3",
     "geist": "1.8",
     "motion": "^14.6.0",
     "next": "16.4.3",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "swr": "2.5.1"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { SWARM_TOKEN, SWARM_URL } from '@/lib/config'
+import { LOCAL_HOSTS, SWARM_TOKEN, SWARM_URL } from '@/lib/config'
 import { cx } from '@/components/ui'
 
 const SCENES = [
@@ -10,8 +10,6 @@ const SCENES = [
   { n: 3, title: 'Pay to keep it' },
 ] as const
 
-const LOCAL = new Set(['localhost', '127.0.0.1', '[::1]'])
-
 /** Presenter controls. Rendered only when /live is served from localhost; keys 1, 2, 3 trigger the same POST. */
 /** `tabLive`: a browser tab holds a relay slot, so scene 1 really buys from it. Only then does the label say so. */
 export function SceneControls({ running, tabLive }: { running?: number, tabLive?: boolean }) {
@@ -19,7 +17,7 @@ export function SceneControls({ running, tabLive }: { running?: number, tabLive?
   const [msg, setMsg] = useState<string>()
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => setLocal(LOCAL.has(window.location.hostname)), [])
+  useEffect(() => setLocal(LOCAL_HOSTS.has(window.location.hostname)), [])
 
   const start = useCallback(async (n: number) => {
     setBusy(true)
@@ -37,7 +35,7 @@ export function SceneControls({ running, tabLive }: { running?: number, tabLive?
   }, [])
 
   useEffect(() => {
-    if (!local) return
+    if (!local || !SWARM_TOKEN) return
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || (e.target as HTMLElement)?.closest('input,textarea,[contenteditable]')) return
       if (e.key === '1' || e.key === '2' || e.key === '3') start(Number(e.key))
@@ -46,7 +44,7 @@ export function SceneControls({ running, tabLive }: { running?: number, tabLive?
     return () => window.removeEventListener('keydown', onKey)
   }, [local, start])
 
-  if (!local) return null
+  if (!local || !SWARM_TOKEN) return null
   return (
     <div className="flex items-center gap-3">
       {msg && <p role="status" className="max-w-xs text-sm text-rejected">{msg}</p>}

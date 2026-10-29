@@ -46,6 +46,25 @@ test('fetchPaid returns blocks whose bytes equal the source file, invoice memo i
   } finally { await Promise.all([seller.stop(), agent.stop()]) }
 })
 
+test('fetch: paymentTimeoutMs and seller hooks reach the gate', async () => {
+  const [seller, agent] = await Promise.all([heliaNode(), heliaNode()])
+  try {
+    const { root } = await addFile(seller)
+    const { server } = await mockServer()
+    const seen = { invoice: 0, verified: 0, settled: [] as any[] }
+    await seller.libp2p.handle(FETCH_PROTOCOL, fetchHandler(seller, server, pricingFor(seller), { maxBytes: 1_000_000, paymentTimeoutMs: 120_000 }, {
+      onInvoice: () => { seen.invoice++ },
+      onVerified: () => { seen.verified++ },
+      onSettled: (info) => { seen.settled.push(info) }
+    }))
+    await fetchPaid(agent.libp2p, seller.libp2p.getMultiaddrs()[0], root, mockClient())
+    assert.equal(seen.invoice, 1)
+    assert.equal(seen.verified, 1)
+    assert.equal(seen.settled.length, 1)
+    assert.ok(seen.settled[0].payment != null)
+  } finally { await Promise.all([seller.stop(), agent.stop()]) }
+})
+
 async function pinSetup () {
   const [provider, agent] = await Promise.all([heliaNode(), heliaNode()])
   const mock = await mockServer()

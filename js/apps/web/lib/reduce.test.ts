@@ -67,3 +67,21 @@ test('a browser tab: label only while it holds the relay, and the edge flips cir
   assert.equal(bestTransport(edge([...circuit, conn(agent, tab, 'webrtc', 'open')])), 'webrtc')
   assert.equal(liveTab(fold([...joined, conn(tab, relay, 'ws', 'closed')])), undefined, 'tab closed: back to the Node seller label')
 })
+
+test('visitor payment folds into the feed with its own tx stages', () => {
+  const s = fold([
+    { dt: 0, e: HELLO },
+    ...PEERS,
+    { dt: 10, e: { kind: 'peer', id: 'visitor-peer', role: 'visitor', label: 'Visitor', addrs: [] } },
+    { dt: 10, e: { kind: 'payment', id: 'visit-1', from: 'visitor-peer', to: 'seller-peer', protocol: 'x402', amount: '10000', asset: 'usdc', network: 'solana:devnet' } },
+    { dt: 10, e: { kind: 'tx', paymentId: 'visit-1', signature: 'sig', status: 'submitted', ms: 0 } },
+    { dt: 10, e: { kind: 'tx', paymentId: 'visit-1', signature: 'sig', status: 'processed', ms: 400 } },
+    { dt: 10, e: { kind: 'tx', paymentId: 'visit-1', signature: 'sig', status: 'confirmed', ms: 800 } },
+    { dt: 10, e: { kind: 'tx', paymentId: 'visit-1', signature: 'sig', status: 'finalized', ms: 1200 } },
+  ])
+  const p = s.payments.find((x) => x.id === 'visit-1')!
+  assert.equal(s.peers['visitor-peer'].role, 'visitor')
+  assert.deepEqual(p.stages.map((x) => x.status), ['processed', 'confirmed', 'finalized'])
+  assert.equal(p.signature, 'sig')
+  assert.equal(s.counters.usdc, 10000)
+})
